@@ -16,7 +16,7 @@ Cần: `herdr-app`, `python3`, và Pillow (`pip install pillow`, nên có: dùng
 hình 2x và làm GIF dáng đi; thiếu thì hình chỉ ở cỡ 1x).
 
 ```sh
-git clone <repo> herdr-pocket && cd herdr-pocket
+git clone https://github.com/tecix/herdr-pokemon-silver && cd herdr-pokemon-silver
 ./install.sh                                   # symlink vào ~/.config/herdr-app ($HERDR_APP_HOME)
 herdr-app do layout.switch --name pocket
 ```
