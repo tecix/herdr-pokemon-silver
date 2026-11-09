@@ -3,9 +3,11 @@
 // route in space order. A town's square takes its space's status color; the
 // shown one has the blinking cursor; its agents' Pokémon stand beside it.
 // Hover (or arrows) names the town at the top, like Gen 2's map; click or
-// Enter goes there and closes the map.
+// Enter goes there and closes the map. Every known machine is an island, even
+// one with no town yet; each ends in "+ THỊ TRẤN MỚI", which founds a new town
+// (space.new) on that machine; N does it on the island under the cursor.
 import { div } from "gpui-kit";
-import { props, closeOverlay, run, spaces, home } from "herdr";
+import { props, closeOverlay, run, spaces, home, machines } from "herdr";
 import {
   frame, v_flex, h_flex, cursor, mon, pokeball, M, INK, DARK, TEXT, SMALL, BIG, FONT, FONT_SMALL, FONT_BIG, LH,
   STATUS_COLOR, STATUS, agentList, crisp, zoom,
@@ -42,8 +44,16 @@ export default class Role {
     if (p.overlay) closeOverlay(p.overlay);
   }
 
+  // A new space on this island's machine ("" = this computer), then close.
+  found(machine) {
+    run("space.new", { machine: machine ?? "" });
+    const p = props() ?? {};
+    if (p.overlay) closeOverlay(p.overlay);
+  }
+
   key(e, cx, order) {
     const k = e.key;
+    if (k === "n") { cx.stop_propagation(); return this.found(order[this.at]?.machine); }
     if (k === "down" || k === "right" || k === "j" || k === "l") this.at = (this.at + 1) % order.length;
     else if (k === "up" || k === "left" || k === "k" || k === "h") this.at = (this.at + order.length - 1) % order.length;
     else if (k === "enter" || k === "space") return order[this.at] && this.go(order[this.at]);
@@ -80,6 +90,9 @@ export default class Role {
     const agents = agentList();
     // Islands: this computer first, then each machine, keeping space order.
     const groups = new Map();
+    for (const m of machines() ?? []) groups.set(m.name ?? "", []);
+    if (!groups.has("")) groups.set("", []);
+    const away = new Set((machines() ?? []).filter((m) => m.layout === "unavailable").map((m) => m.name ?? ""));
     for (const s of all) {
       const k = s.machine ?? "";
       if (!groups.has(k)) groups.set(k, []);
@@ -97,6 +110,21 @@ export default class Role {
         if (j > 0) col = col.child(div().ml(14 + TOWN / 2 - 2).w(4).h(ROUTE).bg(M.peach).opacity(0.8));
         col = col.child(this.town(s, i, agents.filter((a) => a.space === s.id)));
       });
+      col = col.child(
+        h_flex()
+          .id("found-" + (k || "here"))
+          .mt(groups.get(k).length ? 8 : 0)
+          .h(TOWN + 4)
+          .items_center()
+          .gap(8)
+          .cursor_pointer()
+          .text_color(M.overlay1)
+          .hover((st) => st.text_color(M.yellow))
+          .on_click((_e, cx) => { cx.stop_propagation(); this.found(k); })
+          .child(div().w(14).flex_none())
+          .child(div().w(TOWN).h(TOWN).flex_none().rounded(2).border(2).border_dashed().border_color(M.overlay0))
+          .child(div().text_size(TEXT).line_height(LH(TEXT)).child("+ THỊ TRẤN MỚI")),
+      );
       return v_flex()
         .w(ISLAND_W)
         .flex_none()
@@ -106,7 +134,8 @@ export default class Role {
         .bg(M.surface0)
         .border(2)
         .border_color(M.green)
-        .child(div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.green).child(k ? `ĐẢO ${k.toUpperCase()}` : "MÁY NÀY"))
+        .opacity(away.has(k) ? 0.5 : 1)
+        .child(div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.green).child((k ? `ĐẢO ${k.toUpperCase()}` : "MÁY NÀY") + (away.has(k) ? "  ·  mất liên lạc" : "")))
         .child(col);
     });
 
@@ -145,7 +174,7 @@ export default class Role {
       .child(div().flex_1().min_w(0).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).child(info));
 
     const foot = div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.overlay1)
-      .child("↑↓ chọn thị trấn  ·  Enter đến đó  ·  Esc đóng");
+      .child("↑↓ chọn thị trấn  ·  Enter đến đó  ·  N thị trấn mới  ·  Esc đóng");
 
     return frame(v_flex().size_full().gap(10).child(head).child(sea).child(foot), { id: "map", full: true, pad: 12 })
       .track_focus(this.focus)

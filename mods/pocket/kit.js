@@ -105,8 +105,14 @@ export function frame(content, o = {}) {
 // Pixel glyphs for symbols drawn as SVG (▶ ▼ ◆ ◇ □ ⎇ ✓ gear), tinted with the text
 // color: "cursor", "more", "badge", "badge-empty", "zoom", "branch", "check",
 // "gear", plus "pokeball" (full color: use image(), or kit pokeball()).
+// Pictures and sounds load from data/pocket/ui (install.sh and tools/watch.py
+// copy glyphs/, sprites/, sounds/ there and draw pokeball.svg): Herdr loads no
+// image or sound behind a symlink, and the default install links mods/pocket
+// to the repo. A path that failed to load stays failed until Herdr restarts, so
+// they are written before the mod reloads.
+export const UI = "data/pocket/ui";
 export function glyph(name, size = 10) {
-  return svg(`mods/pocket/glyphs/${name}.svg`).size(size).flex_none();
+  return svg(`${UI}/glyphs/${name}.svg`).size(size).flex_none();
 }
 // Blink anything natively (no timer).
 export function blink(el, period = 1000) {
@@ -194,10 +200,10 @@ export function monFit(pane, kind = "front", box = 46, o = {}) {
 
 // A still Poké Ball (no pulse): the plain terminal's icon in the pane header.
 export function pokeballStill(size = 18) {
-  return image("mods/pocket/glyphs/pokeball.svg").size(size).flex_none();
+  return image(`${UI}/pokeball.svg`).size(size).flex_none();
 }
 export function pokeball(size = 18) {
-  const ball = image("mods/pocket/glyphs/pokeball.svg").size(size).flex_none();
+  const ball = image(`${UI}/pokeball.svg`).size(size).flex_none();
   return div().flex().items_center().justify_center().flex_none().child(ball.loop("opacity", { from: 0.45, to: 1, period: 900 }));
 }
 // Opens the picker (role "picker") to choose the Pokémon for a pane.
@@ -370,7 +376,7 @@ export function spriteKey(program) {
   return SPRITES.includes(program.key) ? program.key : "wild";
 }
 export function sprite(program, size = 32) {
-  return image(`mods/pocket/sprites/${spriteKey(program)}.svg`).w(size).h(size).flex_none();
+  return image(`${UI}/sprites/${spriteKey(program)}.svg`).w(size).h(size).flex_none();
 }
 
 // A monster's name: the program's name, upper case, at most 10 letters.
@@ -527,7 +533,7 @@ export function clearRead() {
 // for: "evolve", "shiny". Quiet when settings turn sounds off.
 export function jingle(name) {
   if (settings()?.sounds?.enabled === false) return;
-  try { playSound(`mods/pocket/sounds/${name}.mp3`); } catch {}
+  try { playSound(`${UI}/sounds/${name}.mp3`); } catch {}
 }
 
 // Watches agents for changes of status and turns them into events and EXP.

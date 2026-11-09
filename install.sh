@@ -19,6 +19,13 @@ python3 -c "import PIL" 2>/dev/null || echo "pocket: Pillow not found (pip insta
 
 mkdir -p "$dest/mods" "$dest/layouts" "$dest/themes"
 
+# Pictures and sounds first: Herdr loads none behind a symlink, so they are
+# copied (both modes) to data/pocket/ui, where the mod loads them from, and the
+# watcher copies them again when they change. It also draws the Poké Ball
+# there (no image of it in the repo). Before the mod: a picture that failed to
+# load stays missing until Herdr restarts.
+HERDR_APP_HOME="$dest" python3 "$here/tools/watch.py" --assets
+
 # A copied install (a real folder/file) is moved aside before linking, so
 # nothing is lost; a link from an earlier run is just replaced.
 backup=""
@@ -49,8 +56,6 @@ else
     cp "$here/$f" "$dest/$f"
   done
 fi
-# Generated (gitignored): with links it lands in this repo's mods/pocket/glyphs.
-python3 "$here/tools/make-pokeball.py" > "$dest/mods/pocket/glyphs/pokeball.svg"
 [ -n "$backup" ] && echo "pocket: the old copied install was moved to $backup"
 
 # Herdr doesn't see a change behind a link, so with links a small watcher

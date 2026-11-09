@@ -26,7 +26,9 @@ từ app về repo này, nên sửa code hay `git pull` ở đây là Herdr ch�
 thấy thay đổi nằm sau symlink, vì vậy script cài thêm một watcher nhỏ (`tools/watch.py`,
 systemd user service `herdr-pocket-watch`): file trong repo đổi thì nó thay lại symlink và
 Herdr nạp lại. Không có systemd thì tự chạy `python3 tools/watch.py &` khi đang sửa, hoặc
-`python3 tools/watch.py --once` sau mỗi lần sửa. `./install.sh --copy` chép như cũ (chạy lại
+`python3 tools/watch.py --once` sau mỗi lần sửa. Herdr không nạp hình và âm thanh nằm sau
+symlink, nên `glyphs/`, `sprites/`, `sounds/` được **chép** sang `data/pocket/ui/` (watcher chép
+lại khi chúng đổi) và Poké Ball được vẽ ở đó. `./install.sh --copy` chép như cũ (chạy lại
 để cập nhật). Bản cài kiểu chép trước đó được chuyển sang một thư mục tạm, không bị xóa.
 Pokémon đã chọn, EXP và hình đã tải (shared state của Herdr và `data/pocket/`) được giữ nguyên.
 
@@ -70,6 +72,10 @@ tên agent, tên space, model rút gọn kèm vạch effort, thanh **HP** và th
   (0/1/2) + 1 nếu shiny, tối đa 4; chiêu chưa mở hiện mờ kèm điều kiện. Chọn chiêu thì Pokémon
   dừng lại và ra chiêu trên cánh đồng: hiệu ứng theo hệ (lửa, nước, điện, siêu linh, đá…),
   chiêu càng mạnh càng nhiều hạt, xa và lâu hơn; chiêu mạnh nhất làm lóe cả cánh đồng.
+- **Thị trấn mới**: bấm **+ THỊ TRẤN MỚI** cuối **BẢN ĐỒ** ở sidebar, chọn đảo (MÁY NÀY
+  hoặc một máy trong `hc machine ls`) là có space mới ở đó; chỉ có máy này thì tạo luôn.
+  Overlay bản đồ vẽ đủ mọi máy thành đảo, kể cả đảo chưa có thị trấn; mỗi đảo có dòng
+  **+ THỊ TRẤN MỚI** riêng, phím **N** tạo trên đảo của thị trấn đang chọn.
 - Pane terminal thường (shell) có **Poké Ball** làm icon trên tiêu đề.
 - **THƯ / MENU › THÔNG BÁO**: danh sách thông báo, lọc TẤT CẢ / CHƯA ĐỌC, ✓ để đánh dấu
   đã đọc hoặc chưa đọc từng cái, **ĐỌC HẾT**, **XÓA ĐÃ ĐỌC**. Bấm một dòng để tới agent đó.

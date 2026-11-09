@@ -3,7 +3,7 @@
 // box scroll between them. Narrower than 160px it becomes a rail of party
 // sprites only.
 import { div } from "gpui-kit";
-import { spaces, run, setAgentOrder } from "herdr";
+import { spaces, run, setAgentOrder, machines } from "herdr";
 import {
   M, INK, DARK, LIGHT, PAPER, FOCUS, FONT, TEXT, SMALL, STATUS_COLOR,
   frame, cursor, bar, mon, monFit, pokeball, zoom, openPicker, openAgentInfo, monNameOf, monsterName,
@@ -161,8 +161,9 @@ function sectionTitle(text) {
 }
 
 // The map: the spaces as towns. The shown one has the cursor; a status dot in
-// a fixed column when it has one.
-function mapSection(list) {
+// a fixed column when it has one. The last row founds a new town (space):
+// with other machines known it first opens the islands to choose from.
+function mapSection(list, role) {
   const rows = list.map((s) => {
     const dot = STATUS_COLOR[s.status];
     const dotCol = div().w(DOT_COL).h(MAP_ROW).flex_none().flex().items_center().justify_center();
@@ -186,6 +187,49 @@ function mapSection(list) {
       )
       .child(dotCol);
   });
+  rows.push(
+    h_flex()
+      .id("sp-new")
+      .h(MAP_ROW)
+      .items_center()
+      .gap(4)
+      .cursor_pointer()
+      .text_color(M.overlay1)
+      .hover((st) => st.text_color(INK))
+      .on_click((_e, cx) => {
+        const ms = machines() ?? [];
+        if (ms.length <= 1) return run("space.new", { machine: "" });
+        role.choosing = !role.choosing;
+        cx.notify();
+      })
+      .child(cursor(false))
+      .child(div().flex_1().min_w(0).truncate().text_size(TEXT).line_height(LH(TEXT)).child(role.choosing ? "+ Ở ĐẢO NÀO?" : "+ THỊ TRẤN MỚI")),
+  );
+  if (role.choosing) {
+    const ms = machines() ?? [];
+    const names = [...new Set(["", ...ms.map((m) => m.name ?? "")])];
+    const away = new Set(ms.filter((m) => m.layout === "unavailable").map((m) => m.name ?? ""));
+    for (const k of names) {
+      rows.push(
+        h_flex()
+          .id("sp-new-" + (k || "here"))
+          .h(MAP_ROW)
+          .items_center()
+          .gap(4)
+          .pl(14)
+          .cursor_pointer()
+          .text_color(away.has(k) ? M.overlay0 : M.green)
+          .hover((st) => st.text_color(INK))
+          .on_click((_e, cx) => {
+            role.choosing = false;
+            run("space.new", { machine: k });
+            cx.notify();
+          })
+          .child(cursor(false))
+          .child(div().flex_1().min_w(0).truncate().text_size(TEXT).line_height(LH(TEXT)).child(k ? `ĐẢO ${k.toUpperCase()}` : "MÁY NÀY")),
+      );
+    }
+  }
   return v_flex()
     .flex_none()
     .gap(2)
@@ -297,6 +341,6 @@ export default class Role {
     return root
       .child(sectionTitle("ĐỘI HÌNH"))
       .child(scroll)
-      .child(mapSection(spaces()));
+      .child(mapSection(spaces(), this));
   }
 }

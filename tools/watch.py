@@ -4,9 +4,12 @@
 # behind a symlink happens elsewhere). So: poll the repo's files, and when one
 # changes, swap the matching link in the app's home for a fresh one (same
 # target). Herdr sees the link change and reloads the mod / layout / theme.
-# Standard library only; installed as a systemd user service by install.sh.
-#   python3 tools/watch.py [--once]
+# Pictures and sounds are copied instead (to data/pocket/ui): Herdr loads none
+# behind a symlink. Standard library only; installed as a systemd user service
+# by install.sh.
+#   python3 tools/watch.py [--once | --assets]
 import os
+import shutil
 import sys
 import time
 
@@ -17,6 +20,40 @@ LINKS = ["mods/pocket", "layouts/pocket.json", "layouts/pocket.svg", "themes/poc
 SKIP_DIRS = {"__pycache__", ".git"}
 # Files Herdr itself writes into the mod folder: they must not trigger a reload.
 SKIP_FILES = {"gpui-kit.d.ts", "jsconfig.json"}
+# Folders copied (not linked) into the app home's data/pocket/ui.
+ASSETS = ["glyphs", "sprites", "sounds"]
+UI = os.path.join(DEST, "data", "pocket", "ui")
+
+
+def copy_assets():
+    """Copy mods/pocket/<glyphs|sprites|sounds> to data/pocket/ui, changed files
+    only, and draw the Poké Ball there (tools/make-pokeball.py) if it is missing."""
+    n = 0
+    for a in ASSETS:
+        src = os.path.join(HERE, "mods", "pocket", a)
+        for root, _dirs, files in os.walk(src):
+            out = os.path.join(UI, a, os.path.relpath(root, src))
+            os.makedirs(out, exist_ok=True)
+            for f in files:
+                s, d = os.path.join(root, f), os.path.join(out, f)
+                st = os.stat(s)
+                try:
+                    dt = os.stat(d)
+                    if dt.st_size == st.st_size and dt.st_mtime_ns >= st.st_mtime_ns:
+                        continue
+                except FileNotFoundError:
+                    pass
+                shutil.copy2(s, d)
+                n += 1
+    ball = os.path.join(UI, "pokeball.svg")
+    if not os.path.exists(ball):
+        import subprocess
+        svg = subprocess.run([sys.executable, os.path.join(HERE, "tools", "make-pokeball.py")], capture_output=True, text=True, check=True).stdout
+        with open(ball, "w") as f:
+            f.write(svg)
+        n += 1
+    if n:
+        print(f"pocket watch: copied {n} picture/sound file(s) to {UI}", flush=True)
 
 
 def stamp(rel):
@@ -54,6 +91,10 @@ def relink(rel):
 
 
 def main():
+    if "--assets" in sys.argv:
+        copy_assets()
+        return
+    copy_assets()
     if "--once" in sys.argv:
         for rel in LINKS:
             relink(rel)
@@ -68,6 +109,8 @@ def main():
                 # Let an editor or git finish writing the rest first.
                 time.sleep(0.3)
                 seen[rel] = stamp(rel)
+                if rel == "mods/pocket":
+                    copy_assets()
                 relink(rel)
 
 
