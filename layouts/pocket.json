@@ -1,0 +1,137 @@
+{
+  "id": "root",
+  "type": "column",
+  "theme": "pocket",
+  "font": "JetBrains Mono",
+  "font_size": 14,
+  "ui_font": "Galmuri11",
+  "terminal_padding": [
+    8,
+    6
+  ],
+  "terminal_opacity": 1,
+  "titlebar": "none",
+  "traffic_lights": [
+    12,
+    9
+  ],
+  "background": "#1e2030",
+  "preview": "layouts/pocket.svg",
+  "children": [
+    {
+      "id": "bar",
+      "type": "block",
+      "size": {
+        "px": 34
+      },
+      "window_drag": true,
+      "content": {
+        "mod": "pocket",
+        "props": {
+          "role": "bar"
+        }
+      }
+    },
+    {
+      "id": "screen",
+      "type": "row",
+      "gap": 8,
+      "padding": [
+        0,
+        8
+      ],
+      "children": [
+        {
+          "id": "sidebar",
+          "type": "block",
+          "size": {
+            "px": 300
+          },
+          "min": 160,
+          "max": 460,
+          "content": {
+            "mod": "pocket",
+            "props": {
+              "role": "party"
+            }
+          }
+        },
+        {
+          "id": "main",
+          "type": "block",
+          "content": {
+            "tab": "active",
+            "pane": {
+              "gap": 8,
+              "radius": 4,
+              "background": "#24273a",
+              "border": {
+                "width": 2,
+                "color": "#5b6078"
+              },
+              "focus": {
+                "width": 2,
+                "color": "#c6a0f6"
+              },
+              "header": {
+                "content": {
+                  "mod": "pocket",
+                  "props": {
+                    "role": "header"
+                  }
+                },
+                "height": 30,
+                "position": "top",
+                "reveal": "always"
+              },
+              "lone": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "bottom",
+      "type": "row",
+      "size": {
+        "px": 124
+      },
+      "gap": 0,
+      "children": [
+        {
+          "id": "field",
+          "type": "block",
+          "padding": [
+            8,
+            8
+          ],
+          "content": {
+            "mod": "pocket",
+            "props": {
+              "role": "field"
+            }
+          }
+        },
+        {
+          "id": "dialog",
+          "type": "block",
+          "size": {
+            "px": 520
+          },
+          "padding": [
+            8,
+            8
+          ],
+          "content": {
+            "mod": "pocket",
+            "props": {
+              "role": "dialog"
+            }
+          },
+          "min": 320,
+          "max": 900
+        }
+      ]
+    }
+  ]
+}

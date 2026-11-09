@@ -1,0 +1,9 @@
+# Written by Herdr / Python
+gpui-kit.d.ts
+jsconfig.json
+__pycache__/
+# Pokémon art and generated glyphs never go in the repo
+data/
+mods/pocket/glyphs/pokeball.svg
+*.png
+*.gif
