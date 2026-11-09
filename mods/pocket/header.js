@@ -7,7 +7,7 @@
 import { div } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { panes, props, run, home } from "herdr";
-import { FONT, TEXT, SMALL, M, INK, DARK, PAPER, SELECT, FOCUS, sprite, mon, monNameOf, levelOf, hpOf, bar, glyph, openRename, paneName, agentName, moodOf, moodBubble, agentList, modelBadge, condition, FONT_SMALL, LH } from "./kit.js";
+import { FONT, TEXT, SMALL, M, INK, DARK, PAPER, SELECT, FOCUS, sprite, spriteKey, pokeballStill, mon, monNameOf, levelOf, hpOf, bar, glyph, openRename, paneName, agentName, moodOf, moodBubble, agentList, modelBadge, condition, FONT_SMALL, LH } from "./kit.js";
 
 // Gaps and sizes, shared by both headers so the items line up the same way.
 const GAP = 6;
@@ -75,10 +75,11 @@ function agentKids(a, pane) {
   return kids;
 }
 
-// The shell's line: its program's sprite, its name, the folder, the git branch.
+// The shell's line: a Poké Ball for a plain terminal (else its program's
+// sprite), its name, the folder, the git branch.
 function shellKids(p) {
   const kids = [
-    sprite(p.program, 20),
+    spriteKey(p.program) === "shell" ? pokeballStill(20) : sprite(p.program, 20),
     div().flex_none().text_size(TEXT).line_height(LH(TEXT)).child(paneName(p.pane) || p.program?.name || p.title || "SHELL"),
     div().min_w(0).max_w(260).truncate().text_size(TEXT).line_height(LH(TEXT)).text_color(DARK).child(folder(p.cwd)),
   ];

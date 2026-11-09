@@ -13,6 +13,10 @@
 //   map     dialog: the town map, spaces as towns (kit openMap)
 //   rename  dialog: name a pane (kit openRename; right-click its header)
 //   inbox   dialog: the notifications, mark read / all read (kit openInbox)
+//   agent   dialog: one agent's details and usage limits (kit openAgentInfo;
+//           right-click a party card, not its icon)
+//   fight   popup: a Pokémon's moves (kit openFight; right-click it on the
+//           field); the field plays the one picked (moves.js, fx.js)
 // With no role (herdr-app check), every role renders once, stacked, so a check
 // covers them all.
 
@@ -29,9 +33,11 @@ import Trainer from "./trainer.js";
 import TownMap from "./map.js";
 import Rename from "./rename.js";
 import Inbox from "./inbox.js";
+import AgentInfo from "./agent.js";
+import Fight from "./fight.js";
 import { syncZoom } from "./kit.js";
 
-const ROLES = { bar: Bar, party: Party, header: Header, dialog: Dialog, picker: Picker, field: Field, menu: Menu, trainer: Trainer, map: TownMap, rename: Rename, inbox: Inbox };
+const ROLES = { bar: Bar, party: Party, header: Header, dialog: Dialog, picker: Picker, field: Field, menu: Menu, trainer: Trainer, map: TownMap, rename: Rename, inbox: Inbox, agent: AgentInfo, fight: Fight };
 
 export default class Pocket extends View {
   init(p, cx) {

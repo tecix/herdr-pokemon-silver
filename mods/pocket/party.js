@@ -6,7 +6,7 @@ import { div } from "gpui-kit";
 import { spaces, run, setAgentOrder } from "herdr";
 import {
   M, INK, DARK, LIGHT, PAPER, FOCUS, FONT, TEXT, SMALL, STATUS_COLOR,
-  frame, cursor, bar, mon, monFit, pokeball, zoom, openPicker, monNameOf, monsterName,
+  frame, cursor, bar, mon, monFit, pokeball, zoom, openPicker, openAgentInfo, monNameOf, monsterName,
   agentName, moodOf, moodBubble, hpOf, levelOf, h_flex, v_flex, agentList, FONT_SMALL, LH, lhPx, modelBadge, crisp } from "./kit.js";
 
 const PARTY_MAX = 6;
@@ -38,7 +38,15 @@ function iconBox(a, mood) {
   if (mood === "walk") pic = pic.loop("top", { from: 0, to: -4, period: 360, easing: "linear" });
   else if (mood === "alert") pic = pic.loop("left", { from: -1.5, to: 1.5, period: 160, easing: "linear" });
   else if (mood === "sleep") pic = pic.opacity(0.35);
-  return div().w(w).h(h).flex_none().relative().child(pic);
+  // Right-click the icon: choose the Pokémon (the rest of the card: info).
+  return div()
+    .id("pib-" + a.address)
+    .w(w).h(h).flex_none().relative()
+    .on_mouse_down("right", (_e, cx) => {
+      cx.stop_propagation();
+      openPicker(a.pane);
+    })
+    .child(pic);
 }
 
 // A small picture (rail, PC box): the Pokémon, or a Poké Ball in the same box
@@ -55,6 +63,7 @@ function picture(a, kind, size) {
 //   [══════════ HP: 5-hour limit left ══════════]
 //   [── EXP, thin ──────────────────────────────]
 // Focused: inverted. Waiting on you: red border. Asleep: dimmed icon and name.
+// Right-click: the icon chooses the Pokémon, the rest opens the agent's info.
 function slot(a, barW) {
   const exp = levelOf(a.address).exp;
   const hp = hpOf(a);
@@ -93,7 +102,7 @@ function slot(a, barW) {
     .on_click(() => run("agent.focus", { terminal: a.address }))
     .on_mouse_down("right", (_e, cx) => {
       cx.stop_propagation();
-      openPicker(a.pane);
+      openAgentInfo(a.address);
     });
 }
 
@@ -109,6 +118,10 @@ function boxRow(a) {
     .border_color(M.surface1)
     .cursor_pointer()
     .on_click(() => run("agent.focus", { terminal: a.address }))
+    .on_mouse_down("right", (_e, cx) => {
+      cx.stop_propagation();
+      openAgentInfo(a.address);
+    })
     .child(picture(a, "icon", 30))
     .child(
       v_flex()

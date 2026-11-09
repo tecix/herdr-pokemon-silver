@@ -8,7 +8,7 @@
 import { div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { shared, setShared, agents, spaces, openOverlay, settings, panes, terminals, playSound } from "herdr";
-import { monOf, monName, artOf, agentList, monKey, shinyOf, evolutionOf, setMon, setShiny } from "./mons.js";
+import { monOf, monName, artOf, agentList, monKey, shinyOf, evolutionOf, setMon, setShiny, windowId } from "./mons.js";
 export { agentList };
 
 // Catppuccin Macchiato.
@@ -192,6 +192,10 @@ export function monFit(pane, kind = "front", box = 46, o = {}) {
   return holder.child(image(path).absolute().left(left).top(top).w(w).h(h));
 }
 
+// A still Poké Ball (no pulse): the plain terminal's icon in the pane header.
+export function pokeballStill(size = 18) {
+  return image("mods/pocket/glyphs/pokeball.svg").size(size).flex_none();
+}
 export function pokeball(size = 18) {
   const ball = image("mods/pocket/glyphs/pokeball.svg").size(size).flex_none();
   return div().flex().items_center().justify_center().flex_none().child(ball.loop("opacity", { from: 0.45, to: 1, period: 900 }));
@@ -213,6 +217,16 @@ export function setPaneName(pane, name) {
 export function openRename(pane, value = "") {
   if (!pane) return;
   openOverlay({ mod: "pocket", kind: "dialog", width: 420, height: 180, props: { role: "rename", pane, value } });
+}
+// The agent info dialog (role "agent"): right-click a party card (not its icon).
+export function openAgentInfo(address) {
+  if (!address) return;
+  openOverlay({ mod: "pocket", kind: "dialog", frame: "none", width: 760, height: 540, props: { role: "agent", address } });
+}
+// A Pokémon's moves (role "fight"): a popup at the pointer, from the field.
+export function openFight(address, pane) {
+  if (!address || !pane) return;
+  openOverlay({ mod: "pocket", kind: "popup", frame: "none", width: 270, height: 238, props: { role: "fight", address, pane } });
 }
 export function openPicker(pane) {
   if (!pane) return;
@@ -385,23 +399,61 @@ export function statusTag(status) {
 // reset time not yet passed) and the highest use seen for it. A window whose
 // reset has passed is full again. Unknown: null (a dim, empty bar).
 export const SAME_WINDOW = 300; // s: reset times this close are one window
-export function hpOf(agent) {
+const machineOf = (agent) => (agent?.address?.includes("/") ? agent.address.split("/")[0] : "");
+// Every usage window known for the agent's product on its machine, from
+// shared "pocket.hp" (windows, or just the 5-hour used/resets_at) and Over9k's
+// "machines.stats" limits, by id ("5h", "7d", "7d:Opus", "month", ...):
+// [{ id, used, resets_at (unix s or null), reset: true when it has passed }],
+// 5h first, then 7d, then month. Same rules as HP: the current window and the
+// highest use seen for it; a window whose reset has passed is empty again.
+const WINDOW_ORDER = ["5h", "7d", "month"];
+export function limitsOf(agent) {
   const key = agent?.program?.key;
-  if (!key) return null;
-  const machine = agent?.address?.includes("/") ? agent.address.split("/")[0] : "";
+  if (!key) return [];
+  const machine = machineOf(agent);
   const now = Date.now() / 1000;
-  const found = [];
+  const byId = new Map();
+  const add = (id, used, resets_at) => {
+    if (!id || used == null || !Number.isFinite(Number(used))) return;
+    if (!byId.has(id)) byId.set(id, []);
+    byId.get(id).push({ used: Number(used), resets_at: resets_at ?? null });
+  };
   const mine = shared("pocket.hp")?.[machine]?.[key];
-  if (mine && mine.used != null) found.push({ used: Number(mine.used), resets_at: mine.resets_at ?? null });
+  if (Array.isArray(mine?.windows)) for (const w of mine.windows) add(windowId(w.id), w.used, w.resets_at);
+  else if (mine) add("5h", mine.used, mine.resets_at);
   const lim = shared("machines.stats")?.[machine]?.limits?.[key];
-  const w = (lim?.windows ?? []).find((x) => /^5[- ]?h/i.test(x.name ?? ""));
-  if (w && w.used != null) found.push({ used: Number(w.used), resets_at: w.resets_at ? w.resets_at / 1000 : null });
-  if (!found.length) return null;
-  const live = found.filter((f) => !f.resets_at || f.resets_at > now);
-  if (!live.length) return 100;
-  const latest = Math.max(...live.map((f) => f.resets_at ?? 0));
-  const used = Math.max(...live.filter((f) => !f.resets_at || latest - f.resets_at < SAME_WINDOW).map((f) => f.used));
-  return Math.max(0, Math.min(100, 100 - used));
+  for (const w of lim?.windows ?? []) add(windowId(w.name), w.used, w.resets_at ? w.resets_at / 1000 : null);
+  const out = [];
+  for (const [id, found] of byId) {
+    const live = found.filter((f) => !f.resets_at || f.resets_at > now);
+    if (!live.length) {
+      out.push({ id, used: 0, resets_at: null, reset: true });
+      continue;
+    }
+    const latest = Math.max(...live.map((f) => f.resets_at ?? 0));
+    const same = live.filter((f) => !f.resets_at || latest - f.resets_at < SAME_WINDOW);
+    out.push({ id, used: Math.max(0, Math.min(100, Math.max(...same.map((f) => f.used)))), resets_at: latest || null, reset: false });
+  }
+  const rank = (id) => {
+    const i = WINDOW_ORDER.indexOf(id.split(":")[0]);
+    return (i < 0 ? 9 : i) * 2 + (id.includes(":") ? 1 : 0);
+  };
+  return out.sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id));
+}
+// The account behind the limits, when Over9k's machine panel knows it:
+// { plan, account, failed } or null.
+export function limitAccountOf(agent) {
+  const lim = shared("machines.stats")?.[machineOf(agent)]?.limits?.[agent?.program?.key];
+  return lim && (lim.plan || lim.account || lim.failed || lim.why) ? { plan: lim.plan ?? null, account: lim.account ?? null, failed: lim.failed ?? lim.why ?? null } : null;
+}
+// When the agent's usage numbers were last read (unix s), or null.
+export function limitsAt(agent) {
+  const at = shared("pocket.hp")?.[machineOf(agent)]?.[agent?.program?.key]?.at;
+  return Number.isFinite(Number(at)) ? Number(at) : null;
+}
+export function hpOf(agent) {
+  const five = limitsOf(agent).find((w) => w.id === "5h");
+  return five ? 100 - five.used : null;
 }
 
 // Levels: shared "pocket.levels" = { [address]: { lv, exp } }. Every finished

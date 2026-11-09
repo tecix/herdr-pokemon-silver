@@ -2,10 +2,14 @@
 // Pokémon: it walks while working, strolls while idle, sleeps after 3 minutes
 // without a change, stops and calls for you when blocked, and shows ✓ when done.
 // Ported from the strip part of mathieucroset/herdr-pokemon-agents (MIT).
+// Right-click a Pokémon: its moves (role "fight"); the one picked plays here
+// (shared "pocket.fx", drawn by fx.js), the Pokémon stopping for it.
 import { div, image } from "gpui-kit";
 import { run, settings } from "herdr";
 import { monKey, walkOf } from "./mons.js";
-import { frame, h_flex, FONT, SMALL, DARK, INK, M, STATUS_COLOR, agentName, moodOf, moodBubble, monNameOf, openPicker, pokeball, agentList, FONT_SMALL, LH } from "./kit.js";
+import { frame, h_flex, FONT, SMALL, DARK, INK, M, STATUS_COLOR, agentName, moodOf, moodBubble, monNameOf, openFight, pokeball, agentList, FONT_SMALL, LH } from "./kit.js";
+import { lastCast } from "./moves.js";
+import { effectOf, fxDuration, TYPE_COLOR } from "./fx.js";
 
 const SLOT = 128; // one Pokémon's column (sprite + name tag)
 const GROUND = 24; // the ground line, px above the strip's bottom (room for the name tag)
@@ -43,6 +47,10 @@ export default class Role {
     this.mons = {}; // address -> { x, from, target, dir, moving, start, dur, pauseUntil, mood }
     this.hover = null;
     this.tufts = grass(6);
+    // The move being played: { address, name, type, tier, at, phase 0|1 }.
+    // Casts from before this view started are not replayed.
+    this.fx = null;
+    this.fxSeen = lastCast()?.at ?? 0;
     // The only timer: it wakes the view when a walk starts or ends, a mood
     // changes, or agents come and go. The walk itself runs natively.
     cx.timer.every(250, (cx) => this.tick(cx));
@@ -118,7 +126,35 @@ export default class Role {
       if (!m.moving && (m.x < lo || m.x > hi)) { m.x = m.target = clamp(m.x, lo, hi); m.dur = 150; changed = true; }
     });
     for (const k of Object.keys(this.mons)) if (!live.has(k)) { delete this.mons[k]; changed = true; }
+    if (this.startCast(cx, now)) changed = true;
     if (changed) cx.notify();
+  }
+
+  // A new cast (moves.js castMove): stop that Pokémon where it is, draw the
+  // particles at their start, then at their end one frame later (the
+  // transitions move them), and clear it when it's over.
+  startCast(cx, now) {
+    const c = lastCast();
+    if (!c || c.at <= this.fxSeen) return false;
+    this.fxSeen = c.at;
+    const m = this.mons[c.address];
+    if (!m || now - c.at > 3000) return false;
+    const dur = fxDuration(c.tier);
+    if (m.moving) {
+      const f = clamp((now - m.start) / m.dur, 0, 1);
+      m.x = m.target = m.from + (m.target - m.from) * f;
+      m.moving = false;
+      m.dur = 150;
+    }
+    m.pauseUntil = Math.max(m.pauseUntil, now + dur + 600);
+    this.fx = { ...c, phase: 0 };
+    cx.timer.after(50, (cx) => {
+      if (this.fx?.at === c.at) { this.fx.phase = 1; cx.notify(); }
+    });
+    cx.timer.after(dur + 300, (cx) => {
+      if (this.fx?.at === c.at) { this.fx = null; cx.notify(); }
+    });
+    return true;
   }
 
   // Of a few random spots at least 60px away, the one farthest from the other
@@ -227,8 +263,10 @@ export default class Role {
         .on_click(() => (a.pane ? run("pane.focus", { pane: a.pane }) : run("agent.focus", { terminal: a.address })))
         .on_mouse_down("right", (_e, cx) => {
           cx.stop_propagation();
-          openPicker(a.pane);
+          openFight(a.address, a.pane);
         });
+      const fx = this.fx?.address === a.address ? this.fx : null;
+      let geo = null;
 
       let headY = G - POKEBALL;
       if (meta) {
@@ -245,17 +283,22 @@ export default class Role {
         headY = G - bh;
         // Visible feet on the ground line, visible body centered in the column.
         const shadowW = Math.max(14, Math.round(bw * 0.7));
+        geo = { w: bw, h: bh };
+        const left = SLOT / 2 - (bx + bw / 2);
+        const top = G - (by + bh);
         col = col
           .child(div().absolute().left(SLOT / 2 - shadowW / 2).top(G - 4).w(shadowW).h(6).rounded_full().bg(M.crust).opacity(0.35))
-          .child(image(s.path).absolute().left(SLOT / 2 - (bx + bw / 2)).top(G - (by + bh)).w(s.w * k).h(s.h * k));
+          .child(withMotion(image(s.path).absolute().left(left).top(top).w(s.w * k).h(s.h * k), fx, m, { left, top }));
       } else {
         // Art still downloading: a Poké Ball waits in its place.
         col = col
           .child(div().absolute().left(SLOT / 2 - 10).top(G - 4).w(20).h(6).rounded_full().bg(M.crust).opacity(0.35))
           .child(div().absolute().left(SLOT / 2 - POKEBALL / 2).top(G - POKEBALL).child(pokeball(POKEBALL)));
+        geo = { w: POKEBALL, h: POKEBALL };
       }
 
-      const bubble = moodBubble(mood, SMALL);
+      if (fx) col = col.children(castParts(fx, m, G, geo));
+      const bubble = fx ? movePill(fx) : moodBubble(mood, SMALL);
       if (bubble) {
         col = col.child(h_flex().absolute().left(0).w(SLOT).top(Math.max(0, headY - 20)).justify_center().child(bubble));
       }
@@ -289,6 +332,66 @@ export default class Role {
       root = root.child(col);
     }
 
+    // The strongest moves flash the whole field once.
+    if (this.fx && this.fx.tier >= 3 && this.mons[this.fx.address]) {
+      root = root.child(
+        div().id(`fx-flash-${this.fx.at}`).absolute().left(0).top(0).size_full().bg(M.text)
+          .opacity(this.fx.phase ? 0 : 0.45)
+          .transition("opacity", { duration: 600, easing: "ease-out" }),
+      );
+    }
+
     return frame(root, { full: true, pad: 0 });
   }
+}
+
+// The Pokémon's own motion while it plays a move (fx.js motion), from its
+// resting left/top.
+function withMotion(el, fx, m, base) {
+  if (!fx) return el;
+  const dir = m.dir === "r" ? 1 : -1;
+  const mo = effectOf(fx, { cx: SLOT / 2, mouth: 0, head: 0, ground: 0, w: 0, h: 0, dir, fieldTop: 0 }).motion;
+  if (!mo) return el;
+  if (mo.prop === "opacity") return el.loop("opacity", { from: mo.from, to: mo.to, period: mo.period, easing: "linear" });
+  const b = base[mo.prop] ?? 0;
+  return el.loop(mo.prop, { from: b + mo.from, to: b + mo.to, period: mo.period, easing: "ease-in-out" });
+}
+
+// The particles of a move, in the Pokémon's column.
+function castParts(fx, m, G, geo) {
+  const dir = m.dir === "r" ? 1 : -1;
+  const g = { cx: SLOT / 2, ground: G, head: G - geo.h, mouth: G - geo.h * 0.6, w: geo.w, h: geo.h, dir, fieldTop: 0 };
+  const { parts } = effectOf(fx, g);
+  const on = fx.phase === 1;
+  return parts.map((p, i) => {
+    const pol = { duration: Math.max(1, Math.round(p.dur)), delay: Math.round(p.delay ?? 0), easing: p.easing ?? "ease-out" };
+    const [x, y] = on ? p.to : p.from;
+    let el = div()
+      .id(`fx-${fx.at}-${i}`)
+      .absolute()
+      .left(x)
+      .top(y)
+      .w(on ? p.w1 ?? p.w : p.w)
+      .h(on ? p.h1 ?? p.h : p.h)
+      .rounded(p.round ?? 0)
+      .opacity(on ? p.op1 : p.op0);
+    el = p.ring ? el.border(2).border_color(p.color) : el.bg(p.color);
+    for (const prop of ["left", "top", "width", "height", "opacity"]) el = el.transition(prop, pol);
+    return el;
+  });
+}
+
+// The move's name over the Pokémon, in its type's color: "THUNDERBOLT!".
+function movePill(fx) {
+  return div()
+    .flex_none()
+    .px(5)
+    .rounded(6)
+    .bg(TYPE_COLOR[fx.type] ?? M.text)
+    .text_color(M.crust)
+    .text_size(SMALL)
+    .font_family(FONT_SMALL)
+    .line_height(LH(SMALL))
+    .whitespace_nowrap()
+    .child(`${fx.name}!`);
 }

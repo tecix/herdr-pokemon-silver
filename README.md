@@ -17,17 +17,23 @@ hình 2x và làm GIF dáng đi; thiếu thì hình chỉ ở cỡ 1x).
 
 ```sh
 git clone <repo> herdr-pocket && cd herdr-pocket
-./install.sh                                   # chép vào ~/.config/herdr-app ($HERDR_APP_HOME)
+./install.sh                                   # symlink vào ~/.config/herdr-app ($HERDR_APP_HOME)
 herdr-app do layout.switch --name pocket
 ```
 
-Chạy lại `./install.sh` để cập nhật. Pokémon đã chọn, EXP và hình đã tải (shared state
-của Herdr và `data/pocket/`) được giữ nguyên.
+Mặc định `install.sh` **tạo symlink** `mods/pocket`, `layouts/pocket.*`, `themes/pocket.json`
+từ app về repo này, nên sửa code hay `git pull` ở đây là Herdr chạy bản mới. Herdr không
+thấy thay đổi nằm sau symlink, vì vậy script cài thêm một watcher nhỏ (`tools/watch.py`,
+systemd user service `herdr-pocket-watch`): file trong repo đổi thì nó thay lại symlink và
+Herdr nạp lại. Không có systemd thì tự chạy `python3 tools/watch.py &` khi đang sửa, hoặc
+`python3 tools/watch.py --once` sau mỗi lần sửa. `./install.sh --copy` chép như cũ (chạy lại
+để cập nhật). Bản cài kiểu chép trước đó được chuyển sang một thư mục tạm, không bị xóa.
+Pokémon đã chọn, EXP và hình đã tải (shared state của Herdr và `data/pocket/`) được giữ nguyên.
 
 Tùy chọn:
 - **Tên session, trạng thái, model của Claude Code** chạy dạng background (`claude attach`)
   được đọc từ `~/.claude/sessions` (`agent-info.py`), vì kiểu chạy đó không báo trạng thái cho Herdr.
-- **Thanh HP** dùng các file cache giới hạn 5 giờ mà layout *Over9k* ghi (status line Claude
+- **Thanh HP** và bảng giới hạn trong thông tin agent dùng các file cache giới hạn mà layout *Over9k* ghi (status line Claude
   → `~/.cache/over9k/usage/claude.json`, `antigravity.json`) và `mods/over9k-usage/opencode-quota.py`
   cho OpenCode. Không có thì thanh HP để trống và mờ (không đoán).
 
@@ -40,7 +46,7 @@ Tùy chọn:
 | Tiêu đề mỗi pane | `header` | Icon Pokémon, tên agent, model đầy đủ, HP, trạng thái. **Chuột phải để đổi tên pane** |
 | Dải dưới trái | `field` | Pokémon đi lại khi làm việc, đi dạo khi rảnh, ngủ sau 3 phút |
 | Hộp thoại dưới phải | `dialog` | Thông báo mới nhất, gõ từng chữ. Agent chờ bạn trả lời → màn **chạm trán** (TRẢ LỜI / CHẠY) |
-| Overlay | `menu`, `trainer`, `map`, `picker`, `rename`, `inbox` | Menu START, thẻ trainer, bản đồ, chọn Pokémon, đặt tên pane, danh sách thông báo |
+| Overlay | `menu`, `trainer`, `map`, `picker`, `rename`, `inbox`, `agent`, `fight` | Menu START, thẻ trainer, bản đồ, chọn Pokémon, đặt tên pane, danh sách thông báo, thông tin agent, chiêu thức |
 
 Thẻ agent trong đội hình gồm: icon Pokémon (nhảy khi làm việc, run khi chờ, mờ khi ngủ),
 tên agent, tên space, model rút gọn kèm vạch effort, thanh **HP** và thanh **EXP**.
@@ -52,7 +58,19 @@ tên agent, tên space, model rút gọn kèm vạch effort, thanh **HP** và th
 - **EXP**: mỗi việc xong (`done`) được +34. Đầy thanh (3 việc) thì Pokémon **tiến hóa**
   theo dòng Gen 1, hết đường tiến hóa thì thành **shiny**. Mỗi lần như vậy được một huy hiệu.
 - **Tên agent**: tên đặt cho pane > tên tab đã đặt > tên session Claude > tiêu đề pane > tên chương trình.
-- **Chuột phải** vào thẻ trong đội hình để đổi Pokémon. Chuột phải vào tiêu đề pane để đổi tên pane.
+- **Chuột phải** vào thẻ trong đội hình (hoặc dòng trong HỘP PC) để mở **thông tin agent**:
+  chương trình, model + effort, trạng thái, space/tab, thư mục + nhánh git, máy, terminal,
+  session Claude, EXP, và **giới hạn dùng** của sản phẩm đó trên máy đó: mọi cửa sổ đã biết
+  (5 giờ, 7 ngày, theo model, tháng…) với phần còn lại, giờ reset và thời gian còn lại; gói và
+  tài khoản nếu panel máy của Over9k biết. Chuột phải vào **icon Pokémon** trên thẻ để đổi
+  Pokémon. Chuột phải vào tiêu đề pane để đổi tên pane.
+- **Chiêu thức**: chuột phải vào một Pokémon trên **cánh đồng** để mở bảng chiêu kiểu Gen 2
+  (↑↓/Enter, hoặc bấm). Mỗi Pokémon có 4 chiêu theo hệ Gen 1 của nó (vài con có chiêu riêng:
+  Magikarp SPLASH, Ditto TRANSFORM, Snorlax REST…). Số chiêu dùng được = 1 + bậc tiến hóa
+  (0/1/2) + 1 nếu shiny, tối đa 4; chiêu chưa mở hiện mờ kèm điều kiện. Chọn chiêu thì Pokémon
+  dừng lại và ra chiêu trên cánh đồng: hiệu ứng theo hệ (lửa, nước, điện, siêu linh, đá…),
+  chiêu càng mạnh càng nhiều hạt, xa và lâu hơn; chiêu mạnh nhất làm lóe cả cánh đồng.
+- Pane terminal thường (shell) có **Poké Ball** làm icon trên tiêu đề.
 - **THƯ / MENU › THÔNG BÁO**: danh sách thông báo, lọc TẤT CẢ / CHƯA ĐỌC, ✓ để đánh dấu
   đã đọc hoặc chưa đọc từng cái, **ĐỌC HẾT**, **XÓA ĐÃ ĐỌC**. Bấm một dòng để tới agent đó.
 
@@ -91,15 +109,21 @@ mods/pocket/
               (thông tin Claude, model đọc từ màn hình, mức dùng 5 giờ)
   bar.js party.js header.js field.js dialog.js            các vùng cố định
   menu.js trainer.js map.js picker.js rename.js inbox.js   các overlay
+  agent.js       overlay thông tin agent + giới hạn dùng
+  fight.js       popup chiêu thức (từ cánh đồng)
+  moves.js       hệ Gen 1 của 151 con, bộ chiêu, số chiêu mở theo tiến hóa
+  fx.js          hiệu ứng của từng hệ trên cánh đồng (chỉ animation native)
   agent-info.py  session Claude Code → pocket.info
-  usage5h.py     mức dùng 5 giờ của máy (chạy cả trên máy remote qua exec {on})
+  usage5h.py     mức dùng của máy theo từng cửa sổ (5h, 7d…; chạy cả trên máy remote qua exec {on})
   pixel.py pmd.py bbox.py chiptune.py preview.py           công cụ
 tools/make-pokeball.py  vẽ glyph quả bóng lúc cài
+tools/watch.py          thay lại symlink khi file trong repo đổi, để Herdr nạp lại
 ```
 
 Shared state (`~/.config/herdr-app/shared.json`): `pocket.mons`, `pocket.shiny`, `pocket.art`,
 `pocket.walk`, `pocket.levels`, `pocket.badges`, `pocket.events` (tối đa 50, có cờ `read`),
-`pocket.info`, `pocket.screen`, `pocket.hp`, `pocket.names`, `pocket.trainer`.
+`pocket.info`, `pocket.screen`, `pocket.hp` (kèm `windows` cho mọi cửa sổ giới hạn),
+`pocket.names`, `pocket.trainer`, `pocket.fx` (chiêu vừa ra).
 
 ### Ghi chú khi sửa
 - Chỉ một bản sao chạy bộ nạp: role `dialog` gọi `startLoader(cx)` trong `init`.

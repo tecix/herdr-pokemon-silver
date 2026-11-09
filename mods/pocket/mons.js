@@ -14,8 +14,9 @@
 //                                          (agent-info.py): name, state, model, effort
 //   "pocket.screen" = { [terminal]: { model, effort } }  other agents' model,
 //                                          read off their screen (screenFacts)
-//   "pocket.hp" = { [machine]: { [program key]: { used, resets_at, at } } }
-//                                          5-hour usage (usage5h.py) = HP
+//   "pocket.hp" = { [machine]: { [program key]: { used, resets_at, at, windows } } }
+//                                          5-hour usage (usage5h.py) = HP; windows =
+//                                          [{ id: "5h"|"7d"|"month"|…, used, resets_at }]
 //   "pocket.names" = { [pane id]: name }   a pane renamed from its header
 // Art = { front, front2, anim, anim2, icon, icon2 }: paths for image(), relative to the
 //   app home. front = Crystal front sprite (56px), anim = Crystal's animated
@@ -85,6 +86,14 @@ const EVOLVES = {
   100: 101, 102: 103, 104: 105, 109: 110, 111: 112, 116: 117, 118: 119, 120: 121,
   129: 130, 133: [134, 135, 136], 138: 139, 140: 141, 147: 148, 148: 149,
 };
+// Where a dex stands in its line: 0 base (or no line), 1 middle, 2 final of three.
+const EVOLVED_FROM = {};
+for (const [from, to] of Object.entries(EVOLVES)) for (const t of [].concat(to)) EVOLVED_FROM[t] = Number(from);
+export function stageOf(dex) {
+  let n = 0;
+  for (let d = EVOLVED_FROM[dex]; d && n < 3; d = EVOLVED_FROM[d]) n++;
+  return n;
+}
 export function evolutionOf(dex, pane = "") {
   const e = EVOLVES[dex];
   return Array.isArray(e) ? e[hash(pane) % e.length] : e ?? null;
@@ -335,6 +344,35 @@ export function screenFacts(key, text) {
 const INFO = `${appHome()}/mods/pocket/agent-info.py`;
 const USAGE = `${appHome()}/mods/pocket/usage5h.py`;
 const OPENCODE_QUOTA = `${appHome()}/mods/over9k-usage/opencode-quota.py`;
+// A usage window's id from its name: "5h", "5-hour", "five_hour" -> "5h";
+// "7d", "Weekly (all models)" -> "7d"; "Weekly (Opus)" -> "7d:Opus";
+// "Month" -> "month"; anything else stays as it is.
+export function windowId(name) {
+  const n = String(name ?? "").trim();
+  const extra = (n.match(/\(([^)]*)\)/)?.[1] ?? "").trim();
+  const tail = extra && !/^all\b/i.test(extra) ? ":" + extra : "";
+  if (/^(5[- ]?h|five)/i.test(n)) return "5h" + tail;
+  if (/^(7[- ]?d|seven|week)/i.test(n)) return "7d" + tail;
+  if (/^month/i.test(n)) return "month" + tail;
+  return n;
+}
+// One product's new usage over the last one seen: an idle Claude session can
+// write an older, lower number for the same window, so within one window
+// (reset times under 5 min apart) the highest use seen is kept.
+const sameWindow = (a, b) => a && b && a.resets_at && b.resets_at && Math.abs(a.resets_at - b.resets_at) < 300;
+function keepHighest(old, v) {
+  if (!old || !v) return v;
+  const next = { ...v };
+  if (sameWindow(old, v) && Number(old.used) > Number(v.used)) next.used = old.used;
+  if (Array.isArray(v.windows)) {
+    next.windows = v.windows.map((w) => {
+      const o = (old.windows ?? []).find((x) => x.id === w.id);
+      return sameWindow(o, w) && Number(o.used) > Number(w.used) ? { ...w, used: o.used } : w;
+    });
+  }
+  return next;
+}
+
 export function startLoader(cx) {
   const failedAt = {};
   // HP: each machine's 5-hour usage per product, every minute (usage5h.py,
@@ -360,19 +398,28 @@ export function startLoader(cx) {
             try {
               // An idle Claude session can write an older, lower number for the
               // same window: within one window keep the highest use seen.
-              for (const [k, v] of Object.entries(JSON.parse(r?.stdout || "{}"))) {
-                const old = got[k];
-                const same = old && v && old.resets_at && v.resets_at && Math.abs(old.resets_at - v.resets_at) < 300;
-                got[k] = same && Number(old.used) > Number(v.used) ? { ...v, used: old.used } : v;
-              }
+              for (const [k, v] of Object.entries(JSON.parse(r?.stdout || "{}"))) got[k] = keepHighest(got[k], v);
             } catch {}
           }
           if (oc && keys.has("opencode")) {
             const r = await exec("python3", ["-c", oc], on).catch(() => null);
             try {
               const q = JSON.parse(r?.stdout || "null");
-              const l = [...(q?.current?.limits ?? []), ...(q?.go?.limits ?? [])].find((x) => x.label === "5h");
-              if (l) got.opencode = { used: l.used, resets_at: l.resets_at, at: Math.round(Date.now() / 1000) };
+              const all = [...(q?.current?.limits ?? []), ...(q?.go?.limits ?? [])].filter((x) => x?.label && x.used != null);
+              const windows = [];
+              for (const x of all) {
+                const id = windowId(x.label);
+                const had = windows.find((w) => w.id === id);
+                if (!had) windows.push({ id, used: x.used, resets_at: x.resets_at ?? null });
+                else if (Number(x.used) > Number(had.used)) had.used = x.used;
+              }
+              const five = windows.find((w) => w.id === "5h");
+              if (windows.length) {
+                got.opencode = keepHighest(got.opencode, {
+                  ...(five ? { used: five.used, resets_at: five.resets_at } : {}),
+                  at: Math.round(Date.now() / 1000), windows,
+                });
+              }
             } catch {}
           }
           next[m] = got;
