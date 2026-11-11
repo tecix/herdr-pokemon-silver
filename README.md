@@ -2,7 +2,8 @@
 
 Layout cho ứng dụng desktop **Herdr** (`herdr-app`): mỗi agent (Claude Code, Codex,
 OpenCode, Antigravity, Gemini…) là một Pokémon Gen 1 trong đội hình của bạn. Giao diện
-mô phỏng menu Gen 2 với bảng màu Catppuccin Macchiato. Chữ hiển thị bằng tiếng Việt.
+mô phỏng menu Gen 2 với bảng màu Catppuccin Macchiato. Hỗ trợ **tiếng Việt** và **tiếng Anh**
+(đổi ngay trong **MENU**).
 
 > **Repo này không chứa hình Pokémon nào.** Chỉ có mã và cách làm. Hình được tải về
 > máy bạn ở lần dùng đầu tiên từ các kho sprite công khai (xem *Hình ảnh lấy từ đâu*).
@@ -21,7 +22,7 @@ git clone https://github.com/tecix/herdr-pokemon-silver && cd herdr-pokemon-silv
 herdr-app do layout.switch --name pocket
 ```
 
-Mặc định `install.sh` **tạo symlink** `mods/pocket`, `layouts/pocket.*`, `themes/pocket.json`
+Mặc định `install.sh` **tạo symlink** `mods/pocket`, `layouts/pocket.*`, `themes/pocket.json`, `themes/pocket-light.json`
 từ app về repo này, nên sửa code hay `git pull` ở đây là Herdr chạy bản mới. Herdr không
 thấy thay đổi nằm sau symlink, vì vậy script cài thêm một watcher nhỏ (`tools/watch.py`,
 systemd user service `herdr-pocket-watch`): file trong repo đổi thì nó thay lại symlink và
@@ -79,13 +80,14 @@ tên agent, tên space, model rút gọn kèm vạch effort, thanh **HP** và th
 - Pane terminal thường (shell) có **Poké Ball** làm icon trên tiêu đề.
 - **THƯ / MENU › THÔNG BÁO**: danh sách thông báo, lọc TẤT CẢ / CHƯA ĐỌC, ✓ để đánh dấu
   đã đọc hoặc chưa đọc từng cái, **ĐỌC HẾT**, **XÓA ĐÃ ĐỌC**. Bấm một dòng để tới agent đó.
+- **MENU › NGÔN NGỮ / LANGUAGE**: đổi qua lại giữa tiếng Việt (`VI`) và tiếng Anh (`EN`).
 
 ## Hình ảnh lấy từ đâu (cách làm)
 
 `mons.js` tải hình **khi cần**, vào `~/.config/herdr-app/data/pocket/<số dex>[s]/`:
 
-1. **Sprite mặt trước + động (Crystal)** và **icon menu 40×30 (gen VII)** từ
-   [PokeAPI/sprites](https://github.com/PokeAPI/sprites): `sprites/pokemon/versions/generation-ii/crystal/…`,
+1. **Sprite mặt trước + động Gen 3 (Emerald)** và **icon menu 40×30 (gen VII)** từ
+   [PokeAPI/sprites](https://github.com/PokeAPI/sprites): `sprites/pokemon/versions/generation-iii/emerald/…`,
    `…/generation-vii/icons/…`. Bản shiny: thư mục `shiny/` (PokeAPI), form `0000/0001` (SpriteCollab).
 2. **Bộ dáng đi** (walk/idle/sleep) từ [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab)
    (`sprite/<dex>/`: `AnimData.xml` + các sheet). `pmd.py` cắt sheet thành GIF từng hướng.
@@ -106,7 +108,8 @@ Quả bóng hiện khi đang tải hình được vẽ lúc cài (`tools/make-po
 ```
 layouts/pocket.json   cây layout: bar / [party | tabs] / [field | dialog]
 layouts/pocket.svg    hình xem trước trong bộ chọn layout (preview.py vẽ)
-themes/pocket.json    Catppuccin Macchiato
+themes/pocket.json    Catppuccin Macchiato (tối)
+themes/pocket-light.json  Rosé Pine Dawn (sáng): layout theo chế độ sáng/tối của hệ thống
 mods/pocket/
   main.js     chọn role theo props.role (không có role: vẽ mọi role, cho herdr-app check)
   kit.js      bảng màu, font pixel theo zoom, frame, thanh HP/EXP, tên agent, mood,
@@ -129,7 +132,7 @@ tools/watch.py          thay lại symlink khi file trong repo đổi, để Her
 Shared state (`~/.config/herdr-app/shared.json`): `pocket.mons`, `pocket.shiny`, `pocket.art`,
 `pocket.walk`, `pocket.levels`, `pocket.badges`, `pocket.events` (tối đa 50, có cờ `read`),
 `pocket.info`, `pocket.screen`, `pocket.hp` (kèm `windows` cho mọi cửa sổ giới hạn),
-`pocket.names`, `pocket.trainer`, `pocket.fx` (chiêu vừa ra).
+`pocket.names`, `pocket.trainer`, `pocket.fx` (chiêu vừa ra), `pocket.lang` (`"vi"` | `"en"`).
 
 ### Ghi chú khi sửa
 - Chỉ một bản sao chạy bộ nạp: role `dialog` gọi `startLoader(cx)` trong `init`.

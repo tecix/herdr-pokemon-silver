@@ -1,18 +1,23 @@
 // Pocket: shared pieces for every role. Roles import from here; keep this the
 // one place for the palette, fonts, frames, bars, Pokémon art, levels and events.
 //
-// Look: Catppuccin Macchiato colors, drawn like a Gen 2 handheld screen
+// Look: Catppuccin Macchiato (dark) or Rosé Pine Dawn (light), drawn like a Gen 2 handheld screen
 // (double-bordered text boxes, green/yellow/red HP bars, blue EXP bar).
 // Roles use the named colors below only (no theme(), no other hex).
+// The palette follows the theme (syncTheme).
 
 import { div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { shared, setShared, agents, spaces, openOverlay, settings, panes, terminals, playSound } from "herdr";
+import { theme, shared, setShared, agents, spaces, openOverlay, settings, panes, terminals, playSound, run } from "herdr";
 import { monOf, monName, artOf, agentList, monKey, shinyOf, evolutionOf, setMon, setShiny, windowId } from "./mons.js";
 export { agentList };
 
-// Catppuccin Macchiato.
-export const M = {
+// The palette follows the shown theme (the layout's {light, dark}, or the
+// theme picker): syncTheme() refills M and the names below before every
+// render (main.js), so roles keep reading M.<name> at render time. Never copy
+// a color into a module-level constant; it would miss theme changes.
+// Dark: Catppuccin Macchiato (themes/pocket.json).
+const MACCHIATO = {
   rosewater: "#f4dbd6", flamingo: "#f0c6c6", pink: "#f5bde6", mauve: "#c6a0f6",
   red: "#ed8796", maroon: "#ee99a0", peach: "#f5a97f", yellow: "#eed49f",
   green: "#a6da95", teal: "#8bd5ca", sky: "#91d7e3", sapphire: "#7dc4e4",
@@ -21,23 +26,114 @@ export const M = {
   surface2: "#5b6078", surface1: "#494d64", surface0: "#363a4f", base: "#24273a",
   mantle: "#1e2030", crust: "#181926",
 };
+// Light: Rosé Pine Dawn (themes/pocket-light.json), under Catppuccin's names.
+// Light themes run the other way: surfaces darken toward text, and crust (the
+// track and pill-text color) stays pale so text on colored pills reads.
+const DAWN = {
+  rosewater: "#d7827e", flamingo: "#d7827e", pink: "#d7827e", mauve: "#907aa9",
+  red: "#b4637a", maroon: "#b4637a", peach: "#cf8057", yellow: "#ea9d34",
+  green: "#286983", teal: "#3f7f91", sky: "#56949f", sapphire: "#56949f",
+  blue: "#56949f", lavender: "#9d8ab4", text: "#575279", subtext1: "#686487",
+  subtext0: "#797593", overlay2: "#88839d", overlay1: "#9893a5", overlay0: "#b5b0bd",
+  surface2: "#cecacd", surface1: "#dfdad9", surface0: "#f4ede8", base: "#faf4ed",
+  mantle: "#f2e9e1", crust: "#efe6de",
+};
+// Palettes by theme background; any other theme is derived from its colors.
+const KNOWN = { "#24273a": MACCHIATO, "#faf4ed": DAWN };
+
+export const M = { ...MACCHIATO };
 // Roles' names (kept from the first build): INK = text, DARK = secondary text,
 // LIGHT = the canvas behind boxes, PAPER = a box's fill. SELECT = a focused
-// box's fill, EDGE = box border, FOCUS = focused box border.
-export const INK = M.text;
-export const DARK = M.subtext0;
-export const LIGHT = M.mantle;
-export const PAPER = M.base;
-export const SELECT = M.surface0;
-export const EDGE = M.lavender;
-export const FOCUS = M.mauve;
+// box's fill, EDGE = box border, FOCUS = focused box border. Live bindings:
+// syncTheme() reassigns them.
+export let INK = M.text;
+export let DARK = M.subtext0;
+export let LIGHT = M.mantle;
+export let PAPER = M.base;
+export let SELECT = M.surface0;
+export let EDGE = M.lavender;
+export let FOCUS = M.mauve;
 // Gym badge colors, in order: badge i is BADGE_COLORS[i]; 8 slots.
 export const BADGE_SLOTS = 8;
-export const BADGE_COLORS = [M.red, M.peach, M.yellow, M.green, M.teal, M.blue, M.mauve, M.pink];
+export const BADGE_COLORS = [];
 export function badgeCount() {
   return Math.min(BADGE_SLOTS, Math.max(0, Number(shared("pocket.badges")) || 0));
 }
-export const STATUS_COLOR = { working: M.blue, blocked: M.red, done: M.green, idle: M.overlay1 };
+export const STATUS_COLOR = {};
+
+function hex6(c, fallback) {
+  return typeof c === "string" && /^#[0-9a-fA-F]{6}/.test(c) ? c.slice(0, 7).toLowerCase() : fallback;
+}
+function mixHex(a, b, t) {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const x = p(a);
+  const y = p(b);
+  return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("");
+}
+function luma(h) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+// Catppuccin's names from any Herdr theme's colors.
+function derive(t) {
+  const d = MACCHIATO;
+  const c = (k, f) => hex6(t[k], f);
+  const base = c("background", d.base);
+  const light = luma(base) > 0.5;
+  const text = c("foreground", d.text);
+  const red = c("ansi1", d.red), green = c("ansi2", d.green), yellow = c("ansi3", d.yellow);
+  const blue = c("ansi4", d.blue), pink = c("ansi5", d.pink), teal = c("ansi6", d.teal);
+  const accent = c("accent", pink);
+  const muted = c("muted", mixHex(text, base, 0.25)), dim = c("dim", mixHex(text, base, 0.45));
+  const mantle = c("canvas", mixHex(base, "#000000", light ? 0.04 : 0.15));
+  return {
+    rosewater: mixHex(pink, text, 0.2), flamingo: mixHex(red, pink, 0.5), pink, mauve: accent,
+    red, maroon: c("ansi9", red), peach: mixHex(red, yellow, 0.5), yellow,
+    green, teal, sky: mixHex(teal, blue, 0.35), sapphire: mixHex(blue, teal, 0.5),
+    blue, lavender: c("ring", mixHex(blue, accent, 0.5)), text, subtext1: mixHex(text, muted, 0.5),
+    subtext0: muted, overlay2: mixHex(muted, dim, 0.5), overlay1: dim, overlay0: c("input", mixHex(dim, base, 0.35)),
+    surface2: c("border", mixHex(base, text, 0.25)), surface1: c("selected", mixHex(base, text, 0.15)),
+    surface0: c("hover", mixHex(base, text, 0.08)), base, mantle,
+    crust: light ? mixHex(mantle, text, 0.03) : mixHex(mantle, "#000000", 0.2),
+  };
+}
+let themeNow = null;
+export function syncTheme() {
+  let t = {};
+  try {
+    t = theme() ?? {};
+  } catch {}
+  const key = JSON.stringify(t);
+  if (key === themeNow) return;
+  themeNow = key;
+  Object.assign(M, KNOWN[hex6(t.background, "")] ?? derive(t));
+  INK = M.text;
+  DARK = M.subtext0;
+  LIGHT = M.mantle;
+  PAPER = M.base;
+  SELECT = M.surface0;
+  EDGE = M.lavender;
+  FOCUS = M.mauve;
+  BADGE_COLORS.splice(0, BADGE_COLORS.length, M.red, M.peach, M.yellow, M.green, M.teal, M.blue, M.mauve, M.pink);
+  Object.assign(STATUS_COLOR, { working: M.blue, blocked: M.red, done: M.green, idle: M.overlay1 });
+}
+
+// Language: shared "pocket.lang" = "vi" | "en" (default "vi").
+export function lang() {
+  return shared("pocket.lang") === "en" ? "en" : "vi";
+}
+export function isEn() {
+  return lang() === "en";
+}
+export function setLang(l) {
+  setShared("pocket.lang", l === "en" ? "en" : "vi");
+}
+export function toggleLang() {
+  setLang(isEn() ? "vi" : "en");
+}
+export function tr(vi, en) {
+  return isEn() ? en : vi;
+}
 
 // Fonts: the Galmuri family (OFL, in fonts/, full Vietnamese): Galmuri9 (10px
 // grid) for text, Galmuri7 (8px) for small text, Galmuri11 (12px) for big
@@ -163,11 +259,11 @@ export function crisp(native, want) {
   const k = Math.max(1, Math.floor((want * z) / native + 0.25));
   return (native * k) / z;
 }
-export function mon(pane, kind = "front", size = 56) {
+export function mon(pane, kind = "front", size = 64) {
   const art = artOf(monKey(pane));
-  // Native art: Crystal sprites 56x56, menu icons 40x30. The 2x files exist
+  // Native art: Gen 3 Emerald sprites 64x64, menu icons 40x30. The 2x files exist
   // for k >= 2 so big ones stay sharp without the GPU scaling them.
-  const native = kind === "icon" ? 30 : 56;
+  const native = kind === "icon" ? 30 : 64;
   const h = crisp(native, size);
   const w = kind === "icon" ? (h * 4) / 3 : h;
   if (!art) return pokeball(Math.round(h * 0.5)).w(w).h(h);
@@ -183,13 +279,15 @@ export function monFit(pane, kind = "front", box = 46, o = {}) {
   const holder = div().w(box).h(box).flex_none().relative().overflow_hidden();
   if (!art) return holder.flex().items_center().justify_center().child(pokeball(Math.round(box * 0.5)));
   const z = zoom();
-  const native = kind === "icon" ? [40, 30] : [56, 56];
+  const native = kind === "icon" ? [40, 30] : [64, 64];
   const b = art.box?.[kind] ?? [0, 0, native[0], native[1]];
   const vis = Math.max(b[2] - b[0], b[3] - b[1], 1);
+  const nw = b[4] ?? native[0];
+  const nh = b[5] ?? native[1];
   const k = kind === "icon" ? 1 : Math.max(1, Math.min(2, Math.floor((box * z) / vis)));
   const path = kind === "icon" ? art.icon : k === 2 ? art[kind + "2"] : art[kind];
-  const w = (native[0] * k) / z;
-  const h = (native[1] * k) / z;
+  const w = (nw * k) / z;
+  const h = (nh * k) / z;
   // Snap offsets to whole screen pixels so the art stays crisp.
   const snap = (v) => Math.round(v * z) / z;
   const cx = ((b[0] + b[2]) / 2) * k / z;
@@ -200,10 +298,10 @@ export function monFit(pane, kind = "front", box = 46, o = {}) {
 
 // A still Poké Ball (no pulse): the plain terminal's icon in the pane header.
 export function pokeballStill(size = 18) {
-  return image(`${UI}/pokeball.svg`).size(size).flex_none();
+  return image(`${UI}/pokeball.svg`).size(size).w(size).h(size).flex_none();
 }
 export function pokeball(size = 18) {
-  const ball = image(`${UI}/pokeball.svg`).size(size).flex_none();
+  const ball = image(`${UI}/pokeball.svg`).size(size).w(size).h(size).flex_none();
   return div().flex().items_center().justify_center().flex_none().child(ball.loop("opacity", { from: 0.45, to: 1, period: 900 }));
 }
 // Opens the picker (role "picker") to choose the Pokémon for a pane.
@@ -224,10 +322,19 @@ export function openRename(pane, value = "") {
   if (!pane) return;
   openOverlay({ mod: "pocket", kind: "dialog", width: 420, height: 180, props: { role: "rename", pane, value } });
 }
+export function openRenameTab(tab, value = "") {
+  if (!tab) return;
+  openOverlay({ mod: "pocket", kind: "dialog", width: 420, height: 180, props: { role: "rename", tab, value } });
+}
 // The agent info dialog (role "agent"): right-click a party card (not its icon).
 export function openAgentInfo(address) {
   if (!address) return;
   openOverlay({ mod: "pocket", kind: "dialog", frame: "none", width: 760, height: 540, props: { role: "agent", address } });
+}
+// The town card dialog (role "town"): right-click a town row or map town.
+export function openTown(spaceId) {
+  if (!spaceId) return;
+  openOverlay({ mod: "pocket", kind: "dialog", frame: "none", width: 560, height: 400, props: { role: "town", space: spaceId } });
 }
 // A Pokémon's moves (role "fight"): a popup at the pointer, from the field.
 export function openFight(address, pane) {
@@ -296,7 +403,7 @@ export function modelBadge(a, size = SMALL, o = {}) {
   const text = a?.model ? (o.full ? a.model : shortModel(a.model)) : p?.name ?? "";
   const ic = Math.round(size * 1.1);
   const icon = !p?.icon ? null : p.tint ? svg(p.icon).size(ic).flex_none().text_color(DARK) : image(p.icon).size(ic).flex_none();
-  const bars = a?.model ? effortBars(a.effort, size) : null;
+  const bars = (o.effort && a?.model) ? effortBars(a.effort, size) : null;
   return h_flex()
     .flex_none()
     .gap(4)
@@ -332,17 +439,24 @@ export function moodBubble(mood, size = SMALL) {
 }
 
 // A Gen 2 status condition tag (like SLP / PSN beside the HP bar), for the
-// cards, the header and the PC box: walk "ĐÁNH" (dots cycle), alert "CHỜ!"
-// (pulses red), happy "XONG", sleep "NGỦ" (grey). Null when resting. Fixed
-// width so the line doesn't jitter. The field keeps its bubbles (moodBubble).
-const CONDITION = {
-  walk: { text: ["ĐÁNH", "ĐÁNH.", "ĐÁNH..", "ĐÁNH..."], bg: M.blue },
-  alert: { text: "CHỜ!", bg: M.red },
-  happy: { text: "XONG", bg: M.green },
-  sleep: { text: "NGỦ", bg: M.overlay0 },
+// cards, the header and the PC box: walk "ĐÁNH"/"FIGHT" (dots cycle), alert
+// "CHỜ!"/"WAIT!" (pulses red), happy "XONG"/"DONE", sleep "NGỦ"/"SLP" (grey).
+// Null when resting. Fixed width so the line doesn't jitter. The field keeps
+// its bubbles (moodBubble).
+const CONDITION_VI = {
+  walk: { text: ["ĐÁNH", "ĐÁNH.", "ĐÁNH..", "ĐÁNH..."], bg: "blue" },
+  alert: { text: "CHỜ!", bg: "red" },
+  happy: { text: "XONG", bg: "green" },
+  sleep: { text: "NGỦ", bg: "overlay0" },
+};
+const CONDITION_EN = {
+  walk: { text: ["FIGHT", "FIGHT.", "FIGHT..", "FIGHT..."], bg: "blue" },
+  alert: { text: "WAIT!", bg: "red" },
+  happy: { text: "DONE", bg: "green" },
+  sleep: { text: "SLP", bg: "overlay0" },
 };
 export function condition(mood, size = SMALL) {
-  const c = CONDITION[mood];
+  const c = (isEn() ? CONDITION_EN : CONDITION_VI)[mood];
   if (!c) return null;
   let tag = div()
     .flex_none()
@@ -352,7 +466,7 @@ export function condition(mood, size = SMALL) {
     .items_center()
     .justify_center()
     .rounded(3)
-    .bg(c.bg)
+    .bg(M[c.bg])
     .text_color(M.crust)
     .text_size(size)
     .font_family(fontFor(size))
@@ -388,10 +502,10 @@ export function monsterName(program, title) {
 
 // Status, in game words. `tag` is the badge text ("" for none).
 export const STATUS = {
-  working: { tag: "ĐÁNH", say: "đang ra đòn" },
-  blocked: { tag: "CHỜ!", say: "đang chờ bạn" },
-  done: { tag: "XONG", say: "đã xong việc" },
-  idle: { tag: "zzz", say: "đang nghỉ" },
+  working: { get tag() { return tr("ĐÁNH", "FIGHT"); }, get say() { return tr("đang ra đòn", "working"); } },
+  blocked: { get tag() { return tr("CHỜ!", "WAIT!"); }, get say() { return tr("đang chờ bạn", "waiting on you"); } },
+  done: { get tag() { return tr("XONG", "DONE"); }, get say() { return tr("đã xong việc", "finished"); } },
+  idle: { get tag() { return "zzz"; }, get say() { return tr("đang nghỉ", "resting"); } },
 };
 export function statusTag(status) {
   return STATUS[status]?.tag ?? "";
@@ -413,22 +527,32 @@ const machineOf = (agent) => (agent?.address?.includes("/") ? agent.address.spli
 // 5h first, then 7d, then month. Same rules as HP: the current window and the
 // highest use seen for it; a window whose reset has passed is empty again.
 const WINDOW_ORDER = ["5h", "7d", "month"];
-export function limitsOf(agent) {
-  const key = agent?.program?.key;
+export const AGY_ORDER = ["7d:Gemini", "5h:Gemini", "7d:Other", "5h:Other", "7d:Argon"];
+const AGY_VALID_WINDOWS = new Set(AGY_ORDER);
+export function limitsForProduct(key, machine = "") {
   if (!key) return [];
-  const machine = machineOf(agent);
   const now = Date.now() / 1000;
   const byId = new Map();
-  const add = (id, used, resets_at) => {
+  const normId = (raw) => {
+    let id = windowId(raw);
+    if (key === "antigravity") {
+      if (id === "5h") id = "5h:Gemini";
+      else if (id === "7d") id = "7d:Gemini";
+      if (!AGY_VALID_WINDOWS.has(id)) return null;
+    }
+    return id;
+  };
+  const add = (rawId, used, resets_at) => {
+    const id = normId(rawId);
     if (!id || used == null || !Number.isFinite(Number(used))) return;
     if (!byId.has(id)) byId.set(id, []);
     byId.get(id).push({ used: Number(used), resets_at: resets_at ?? null });
   };
   const mine = shared("pocket.hp")?.[machine]?.[key];
-  if (Array.isArray(mine?.windows)) for (const w of mine.windows) add(windowId(w.id), w.used, w.resets_at);
+  if (Array.isArray(mine?.windows)) for (const w of mine.windows) add(w.id, w.used, w.resets_at);
   else if (mine) add("5h", mine.used, mine.resets_at);
   const lim = shared("machines.stats")?.[machine]?.limits?.[key];
-  for (const w of lim?.windows ?? []) add(windowId(w.name), w.used, w.resets_at ? w.resets_at / 1000 : null);
+  for (const w of lim?.windows ?? []) add(w.name, w.used, w.resets_at ? w.resets_at / 1000 : null);
   const out = [];
   for (const [id, found] of byId) {
     const live = found.filter((f) => !f.resets_at || f.resets_at > now);
@@ -440,17 +564,35 @@ export function limitsOf(agent) {
     const same = live.filter((f) => !f.resets_at || latest - f.resets_at < SAME_WINDOW);
     out.push({ id, used: Math.max(0, Math.min(100, Math.max(...same.map((f) => f.used)))), resets_at: latest || null, reset: false });
   }
+  if (key === "antigravity") {
+    return out.sort((a, b) => {
+      const ia = AGY_ORDER.indexOf(a.id);
+      const ib = AGY_ORDER.indexOf(b.id);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.id.localeCompare(b.id);
+    });
+  }
   const rank = (id) => {
     const i = WINDOW_ORDER.indexOf(id.split(":")[0]);
     return (i < 0 ? 9 : i) * 2 + (id.includes(":") ? 1 : 0);
   };
   return out.sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id));
 }
-// The account behind the limits, when Over9k's machine panel knows it:
+export function limitsOf(agent) {
+  return limitsForProduct(agent?.program?.key, machineOf(agent));
+}
+// The account behind the limits, when Over9k's machine panel or usage5h.py knows it:
 // { plan, account, failed } or null.
+export function productAccountOf(key, machine = "") {
+  if (!key) return null;
+  const lim = shared("machines.stats")?.[machine]?.limits?.[key];
+  const hpPlan = shared("pocket.hp")?.[machine]?.[key]?.plan ?? null;
+  const plan = lim?.plan ?? hpPlan ?? null;
+  const account = lim?.account ?? null;
+  const failed = lim?.failed ?? lim?.why ?? null;
+  return plan || account || failed ? { plan, account, failed } : null;
+}
 export function limitAccountOf(agent) {
-  const lim = shared("machines.stats")?.[machineOf(agent)]?.limits?.[agent?.program?.key];
-  return lim && (lim.plan || lim.account || lim.failed || lim.why) ? { plan: lim.plan ?? null, account: lim.account ?? null, failed: lim.failed ?? lim.why ?? null } : null;
+  return productAccountOf(agent?.program?.key, machineOf(agent));
 }
 // When the agent's usage numbers were last read (unix s), or null.
 export function limitsAt(agent) {
@@ -458,7 +600,14 @@ export function limitsAt(agent) {
   return Number.isFinite(Number(at)) ? Number(at) : null;
 }
 export function hpOf(agent) {
-  const five = limitsOf(agent).find((w) => w.id === "5h");
+  const lims = limitsOf(agent);
+  if (agent?.program?.key === "antigravity") {
+    const isOther = agent.model && !/^gemini\b/i.test(agent.model);
+    const want = isOther ? "5h:Other" : "5h:Gemini";
+    const match = lims.find((w) => w.id === want) ?? lims.find((w) => w.id.startsWith("5h"));
+    return match ? 100 - match.used : null;
+  }
+  const five = lims.find((w) => w.id === "5h") ?? lims.find((w) => w.id.startsWith("5h"));
   return five ? 100 - five.used : null;
 }
 
@@ -504,9 +653,55 @@ export const EVENTS_MAX = 50;
 export function events() {
   return shared("pocket.events") ?? [];
 }
-export function pushEvent(text, address = null, kind = "info") {
-  const list = [{ id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, at: Date.now(), text, address, kind }, ...events()].slice(0, EVENTS_MAX);
+export function pushEvent(text, address = null, kind = "info", extra = {}) {
+  const list = [{ id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, at: Date.now(), text, address, kind, ...extra }, ...events()].slice(0, EVENTS_MAX);
   setShared("pocket.events", list);
+}
+export function eventText(e) {
+  if (!e) return "";
+  if (e.name) {
+    if (e.kind === "evolve" && e.from && e.to) {
+      return tr(
+        `${monName(e.from)} của ${e.name} tiến hóa thành ${monName(e.to)}!`,
+        `${e.name}'s ${monName(e.from)} evolved into ${monName(e.to)}!`,
+      );
+    }
+    if (e.kind === "shiny" && e.from) {
+      return tr(
+        `${monName(e.from)} của ${e.name} trở thành shiny!`,
+        `${e.name}'s ${monName(e.from)} turned shiny!`,
+      );
+    }
+    if (e.kind === "done") {
+      const m = e.mon ? e.mon + " " : "";
+      const x = e.exp ?? EXP_PER_DONE;
+      return tr(
+        `${e.name} đã xong việc! ${m}+${x} EXP`,
+        `${e.name} finished the job! ${m}+${x} EXP`,
+      );
+    }
+    if (e.kind === "blocked") {
+      return tr(
+        `${e.name} đang chờ bạn trả lời!`,
+        `${e.name} is waiting for your reply!`,
+      );
+    }
+  }
+  const t = String(e.text ?? "");
+  if (isEn()) {
+    let m;
+    if ((m = t.match(/^(.+) của (.+) tiến hóa thành (.+)!$/))) return `${m[2]}'s ${m[1]} evolved into ${m[3]}!`;
+    if ((m = t.match(/^(.+) của (.+) trở thành shiny!$/))) return `${m[2]}'s ${m[1]} turned shiny!`;
+    if ((m = t.match(/^(.+) đã xong việc!(.*)$/))) return `${m[1]} finished the job!${m[2]}`;
+    if ((m = t.match(/^(.+) đang chờ bạn trả lời!$/))) return `${m[1]} is waiting for your reply!`;
+  } else {
+    let m;
+    if ((m = t.match(/^(.+)'s (\S+) evolved into (\S+)!$/))) return `${m[2]} của ${m[1]} tiến hóa thành ${m[3]}!`;
+    if ((m = t.match(/^(.+)'s (\S+) turned shiny!$/))) return `${m[2]} của ${m[1]} trở thành shiny!`;
+    if ((m = t.match(/^(.+) finished the job!(.*)$/))) return `${m[1]} đã xong việc!${m[2]}`;
+    if ((m = t.match(/^(.+) is waiting for your reply!$/))) return `${m[1]} đang chờ bạn trả lời!`;
+  }
+  return t;
 }
 export function unreadCount() {
   return events().filter((e) => !e.read).length;
@@ -526,6 +721,12 @@ export function markAllRead() {
 export function clearRead() {
   const list = events();
   const keep = list.filter((e) => !e.read);
+  if (keep.length !== list.length) setShared("pocket.events", keep);
+}
+// Removes one event (right-click on the message box, role "dialog").
+export function dismissEvent(id) {
+  const list = events();
+  const keep = list.filter((e) => e.id !== id);
   if (keep.length !== list.length) setShared("pocket.events", keep);
 }
 
@@ -578,19 +779,81 @@ export function trackAgents(memo) {
       const r = gainExp(a);
       jobsDone++;
       if (r.change) jingle(r.change.kind);
-      if (r.change?.kind === "evolve") pushEvent(`${monName(r.change.from)} của ${name} tiến hóa thành ${monName(r.change.to)}!`, a.address, "evolve");
-      else if (r.change?.kind === "shiny") pushEvent(`${monName(r.change.from)} của ${name} trở thành shiny!`, a.address, "shiny");
-      else pushEvent(`${name} đã xong việc! ${mon ? mon + " " : ""}+${EXP_PER_DONE} EXP`, a.address, "done");
+      if (r.change?.kind === "evolve") {
+        const { from, to } = r.change;
+        pushEvent(
+          tr(`${monName(from)} của ${name} tiến hóa thành ${monName(to)}!`, `${name}'s ${monName(from)} evolved into ${monName(to)}!`),
+          a.address, "evolve", { name, from, to },
+        );
+      } else if (r.change?.kind === "shiny") {
+        const { from } = r.change;
+        pushEvent(
+          tr(`${monName(from)} của ${name} trở thành shiny!`, `${name}'s ${monName(from)} turned shiny!`),
+          a.address, "shiny", { name, from },
+        );
+      } else {
+        pushEvent(
+          tr(`${name} đã xong việc! ${mon ? mon + " " : ""}+${EXP_PER_DONE} EXP`, `${name} finished the job! ${mon ? mon + " " : ""}+${EXP_PER_DONE} EXP`),
+          a.address, "done", { name, mon, exp: EXP_PER_DONE },
+        );
+      }
     } else if (a.status === "blocked") {
-      pushEvent(`${name} đang chờ bạn trả lời!`, a.address, "blocked");
+      pushEvent(
+        tr(`${name} đang chờ bạn trả lời!`, `${name} is waiting for your reply!`),
+        a.address, "blocked", { name },
+      );
     }
   }
   noteTrainer(now, jobsDone);
 }
 
-// The START menu and its screens (roles "menu", "trainer", "map", "inbox").
+// The START menu and its screens (roles "menu", "trainer", "map", "inbox", "stamina").
 export function openMenu() {
-  openOverlay({ mod: "pocket", kind: "popup", frame: "none", width: 230, height: 266, props: { role: "menu" } });
+  openOverlay({ mod: "pocket", kind: "popup", frame: "none", width: 240, height: 330, props: { role: "menu" } });
+}
+export function openSidePane(role) {
+  const all = panes();
+  const here = spaces().flatMap((s) => s.tabs).find((t) => t.active)?.id;
+  const roles = shared("pocket.pane.roles") ?? {};
+  const found = all.find((p) => roles[p.pane] === role || (role === "stamina" && shared("pocket.stamina.pane") === p.pane));
+  if (found) {
+    if (found.tab === here) {
+      if (found.focused) {
+        run("pane.close", { pane: found.pane });
+        return;
+      }
+      run("pane.focus", { pane: found.pane });
+      return;
+    }
+    // If it was in another tab, close that one
+    run("pane.close", { pane: found.pane });
+  }
+
+  // Find the active terminal or pane in this tab to split to its right
+  const target = all.find((p) => p.tab === here && p.focused) ?? all.find((p) => p.tab === here && p.terminal) ?? all.find((p) => p.tab === here);
+  setShared("pocket.pane.pending", {
+    role,
+    before: (panes() ?? []).filter((p) => p.mod === "pocket").map((p) => p.pane),
+    at: Date.now(),
+  });
+  run("pane.split", {
+    direction: "right",
+    ...(target ? { pane: target.pane } : {}),
+    mod: "pocket",
+    props: { role },
+  });
+}
+export function openStamina() {
+  return openSidePane("stamina");
+}
+// The quest log (role "quest"): each town's to-do list, as a right side pane.
+export function openQuest() {
+  return openSidePane("quest");
+}
+// The bag (role "bag"): items that send a preset command to one agent.
+export function openBag(address) {
+  if (!address) return;
+  openOverlay({ mod: "pocket", kind: "dialog", frame: "none", width: 520, height: 420, props: { role: "bag", address } });
 }
 export function openTrainer() {
   openOverlay({ mod: "pocket", kind: "dialog", frame: "none", width: 600, height: 380, props: { role: "trainer" } });
@@ -611,3 +874,4 @@ export function placeName() {
 export { h_flex, v_flex };
 
 syncZoom();
+syncTheme();

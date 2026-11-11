@@ -9,10 +9,10 @@ import { exec, home } from "herdr";
 import { COUNT } from "./mons.js";
 import {
   frame, v_flex, h_flex, glyph, mon, monFit, pokeball, M, INK, DARK, TEXT, SMALL, BIG, FONT, FONT_SMALL, FONT_BIG, LH,
-  trainer, agentList, agentName, monNameOf, BADGE_SLOTS, BADGE_COLORS, badgeCount, crisp,
+  trainer, agentList, agentName, monNameOf, BADGE_SLOTS, BADGE_COLORS, badgeCount, crisp, tr,
 } from "./kit.js";
 
-const LEAD = 112;
+const LEAD = 128; // Gen 3 art (64px doubled)
 
 function idNo(name) {
   let h = 7;
@@ -55,16 +55,16 @@ export default class Role {
 
     const top = h_flex()
       .items_center()
-      .child(div().flex_1().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(M.yellow).child("THẺ TRAINER"))
+      .child(div().flex_1().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(M.yellow).child(tr("THẺ TRAINER", "TRAINER CARD")))
       .child(div().text_size(TEXT).line_height(LH(TEXT)).text_color(DARK).child(`ID No. ${idNo(this.name)}`));
 
     const stats = v_flex()
       .flex_1()
       .min_w(0)
-      .child(stat("TÊN/", this.name))
-      .child(stat("VIỆC XONG", String(t.jobs ?? 0)))
+      .child(stat(tr("TÊN/", "NAME/"), this.name))
+      .child(stat(tr("VIỆC XONG", "JOBS DONE"), String(t.jobs ?? 0)))
       .child(stat("POKÉDEX", `${seen} / ${COUNT}`))
-      .child(stat("THỜI GIAN", playTime(t.since)));
+      .child(stat(tr("THỜI GIAN", "PLAY TIME"), playTime(t.since)));
 
     const portrait = v_flex()
       .flex_none()
@@ -76,7 +76,7 @@ export default class Role {
           .child(div().absolute().left(0).top(0).child(lead?.pane ? monFit(lead.pane, "anim", LEAD, { align: "bottom" }) : div().w(LEAD).h(LEAD).flex().items_center().justify_center().child(pokeball(40)))),
       )
       .child(div().max_w(LEAD + 20).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK)
-        .child(lead ? `${lead.pane ? monNameOf(lead.pane) : ""} · ${agentName(lead)}` : "chưa có Pokémon"));
+        .child(lead ? `${lead.pane ? monNameOf(lead.pane) : ""} · ${agentName(lead)}` : tr("chưa có Pokémon", "no Pokémon yet")));
 
     let badgeRow = h_flex().gap(10).items_center();
     for (let i = 0; i < BADGE_SLOTS; i++) {
@@ -101,10 +101,10 @@ export default class Role {
       .child(div().h(2).bg(M.surface1))
       .child(h_flex().gap(16).items_center().child(stats).child(portrait))
       .child(div().h(2).bg(M.surface1))
-      .child(section("HUY HIỆU", badgeRow))
-      .child(section("ĐỘI HÌNH", partyRow))
+      .child(section(tr("HUY HIỆU", "BADGES"), badgeRow))
+      .child(section(tr("ĐỘI HÌNH", "PARTY"), partyRow))
       .child(div().flex_1())
-      .child(div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.overlay1).child("Esc để đóng"));
+      .child(div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.overlay1).child(tr("Esc để đóng", "Esc to close")));
 
     return frame(card, { id: "trainer", full: true, pad: 14 });
   }

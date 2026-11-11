@@ -11,7 +11,8 @@ size = (im.width * k, im.height * k)
 if getattr(im, "n_frames", 1) > 1:
     frames, durations = [], []
     for f in ImageSequence.Iterator(im):
-        durations.append(f.info.get("duration", im.info.get("duration", 100)))
+        dur = f.info.get("duration", im.info.get("duration", 100))
+        durations.append(max(10, int(round(dur))))
         frames.append(f.convert("RGBA").resize(size, Image.NEAREST))
     frames[0].save(out, save_all=True, append_images=frames[1:], duration=durations,
                    loop=0, disposal=2, optimize=False)

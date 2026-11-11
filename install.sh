@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the Pocket layout into the Herdr desktop app's home
 # (~/.config/herdr-app, or $HERDR_APP_HOME): mods/pocket, layouts/pocket.*,
-# themes/pocket.json. Herdr hot-reloads them. Pokémon art is not shipped: it is
+# themes/pocket.json and themes/pocket-light.json. Herdr hot-reloads them. Pokémon art is not shipped: it is
 # downloaded on first use (see README). Your picks, EXP and downloaded art
 # (shared state and data/pocket) are kept.
 #
@@ -40,7 +40,7 @@ aside() {
 if [ "$mode" = link ]; then
   aside "$dest/mods/pocket"
   ln -s "$here/mods/pocket" "$dest/mods/pocket"
-  for f in layouts/pocket.json layouts/pocket.svg themes/pocket.json; do
+  for f in layouts/pocket.json layouts/pocket.svg themes/pocket.json themes/pocket-light.json; do
     aside "$dest/$f"
     ln -s "$here/$f" "$dest/$f"
   done
@@ -51,7 +51,7 @@ else
   else
     mkdir -p "$dest/mods/pocket" && cp -R "$here/mods/pocket/." "$dest/mods/pocket/"
   fi
-  for f in layouts/pocket.json layouts/pocket.svg themes/pocket.json; do
+  for f in layouts/pocket.json layouts/pocket.svg themes/pocket.json themes/pocket-light.json; do
     [ -L "$dest/$f" ] && rm "$dest/$f"
     cp "$here/$f" "$dest/$f"
   done
@@ -86,6 +86,21 @@ EOF
   fi
 elif [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/herdr-pocket-watch.service" ]; then
   systemctl --user disable --now herdr-pocket-watch.service >/dev/null 2>&1 || true
+fi
+
+# Antigravity CLI helper: persistent tracking of Gemini & Other model quotas and session info.
+if [ -d "$HOME/.gemini/antigravity-cli" ] && command -v jq >/dev/null 2>&1; then
+  as="$HOME/.gemini/antigravity-cli/settings.json"
+  [ -s "$as" ] || echo '{}' > "$as"
+  cur=$(jq -r '.statusLine.command // ""' "$as" 2>/dev/null || true)
+  case "$cur" in
+    ""|*agy-statusline.sh*)
+      jq --arg s "sh \"$dest/mods/pocket/agy-statusline.sh\"" --arg t "sh \"$dest/mods/pocket/agy-title.sh\"" \
+        '.statusLine = {type: "command", command: $s, stack_with_default: true} | .title = {type: "command", command: $t}' \
+        "$as" > "$as.tmp" && mv "$as.tmp" "$as" || rm -f "$as.tmp"
+      echo "pocket: Antigravity statusLine/title helper installed"
+      ;;
+  esac
 fi
 
 if command -v herdr-app >/dev/null; then

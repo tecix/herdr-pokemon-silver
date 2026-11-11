@@ -8,15 +8,17 @@
 import { div } from "gpui-kit";
 import { props, closeOverlay } from "herdr";
 import { monOf, monName, stageOf, shinyOf } from "./mons.js";
-import { frame, v_flex, h_flex, cursor, M, INK, DARK, TEXT, SMALL, FONT_SMALL, LH, openPicker } from "./kit.js";
-import { movesOf, castMove, TYPE_NAME, unlockedOf } from "./moves.js";
+import { frame, v_flex, h_flex, cursor, M, INK, DARK, TEXT, SMALL, FONT_SMALL, LH, openPicker, tr } from "./kit.js";
+import { movesOf, castMove, typeName, unlockedOf } from "./moves.js";
 
 // Why a locked slot is locked: what it takes to open it.
 function unlockHint(pane, i) {
   const dex = monOf(pane);
   const need = i + 1 - (1 + stageOf(dex) + (shinyOf(pane) ? 1 : 0));
   if (need <= 0) return "";
-  return need === 1 ? "tiến hóa (hoặc shiny) để mở" : `cần thêm ${need} bậc tiến hóa / shiny`;
+  return need === 1
+    ? tr("tiến hóa (hoặc shiny) để mở", "evolve (or shiny) to unlock")
+    : tr(`cần thêm ${need} bậc tiến hóa / shiny`, `needs ${need} more evolutions / shiny`);
 }
 
 export default class Role {
@@ -59,7 +61,7 @@ export default class Role {
 
   render(_cx) {
     const p = props() ?? {};
-    if (!p.pane) return frame(div().child("Chưa chọn Pokémon nào."), { full: true });
+    if (!p.pane) return frame(div().child(tr("Chưa chọn Pokémon nào.", "No Pokémon selected.")), { full: true });
     const moves = movesOf(p.pane);
     const rowH = Math.round(TEXT * 1.6);
     const row = (i, label, color) =>
@@ -75,22 +77,22 @@ export default class Role {
 
     const rows = moves.map((m, i) =>
       row(i, m.name, m.locked ? M.surface2 : this.at === i ? INK : DARK));
-    rows.push(row(4, "ĐỔI POKÉMON", this.at === 4 ? M.yellow : M.overlay1));
+    rows.push(row(4, tr("ĐỔI POKÉMON", "CHANGE POKÉMON"), this.at === 4 ? M.yellow : M.overlay1));
 
     // The info line: the hovered move's type and power, or why it is locked.
     const m = moves[this.at];
     const info = !m
-      ? "chọn Pokémon khác cho agent này"
+      ? tr("chọn Pokémon khác cho agent này", "choose another Pokémon for this agent")
       : m.locked
-        ? `KHÓA · ${unlockHint(p.pane, this.at)}`
-        : `HỆ/${TYPE_NAME[m.type] ?? m.type} · ${"★".repeat(m.tier + 1)}`;
+        ? `${tr("KHÓA", "LOCKED")} · ${unlockHint(p.pane, this.at)}`
+        : `${tr("HỆ", "TYPE")}/${typeName(m.type)} · ${"★".repeat(m.tier + 1)}`;
 
     const dex = monOf(p.pane);
     const title = h_flex()
       .items_center()
       .gap(6)
       .child(div().flex_1().min_w(0).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.yellow)
-        .child(`${monName(dex)} · CHIÊU THỨC`))
+        .child(`${monName(dex)} · ${tr("CHIÊU THỨC", "MOVES")}`))
       .child(div().flex_none().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK)
         .child(`${unlockedOf(p.pane)}/4`));
 

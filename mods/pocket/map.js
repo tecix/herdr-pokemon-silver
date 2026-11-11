@@ -6,11 +6,13 @@
 // Enter goes there and closes the map. Every known machine is an island, even
 // one with no town yet; each ends in "+ THỊ TRẤN MỚI", which founds a new town
 // (space.new) on that machine; N does it on the island under the cursor.
+import { lootChips } from "./gitloot.js";
 import { div } from "gpui-kit";
 import { props, closeOverlay, run, spaces, home, machines } from "herdr";
+import { islandIcon } from "./scene.js";
 import {
   frame, v_flex, h_flex, cursor, mon, pokeball, M, INK, DARK, TEXT, SMALL, BIG, FONT, FONT_SMALL, FONT_BIG, LH,
-  STATUS_COLOR, STATUS, agentList, crisp, zoom,
+  STATUS_COLOR, STATUS, agentList, crisp, zoom, tr, openTown,
 } from "./kit.js";
 
 const TOWN = 16; // a town's square
@@ -79,9 +81,11 @@ export default class Role {
       .cursor_pointer()
       .on_hover((h, cx) => { if (h && this.at !== i) { this.at = i; cx.notify(); } })
       .on_click((_e, cx) => { cx.stop_propagation(); this.go(s); })
+      .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openTown(s.id); })
       .child(cursor(s.active))
       .child(square)
       .child(div().max_w(150).truncate().text_size(TEXT).line_height(LH(TEXT)).text_color(here ? INK : DARK).child(s.name.toUpperCase()))
+      .when(Boolean(lootChips(s.id)), (e) => e.child(lootChips(s.id, SMALL)))
       .child(icons);
   }
 
@@ -110,21 +114,38 @@ export default class Role {
         if (j > 0) col = col.child(div().ml(14 + TOWN / 2 - 2).w(4).h(ROUTE).bg(M.peach).opacity(0.8));
         col = col.child(this.town(s, i, agents.filter((a) => a.space === s.id)));
       });
-      col = col.child(
-        h_flex()
-          .id("found-" + (k || "here"))
-          .mt(groups.get(k).length ? 8 : 0)
-          .h(TOWN + 4)
-          .items_center()
-          .gap(8)
-          .cursor_pointer()
-          .text_color(M.overlay1)
-          .hover((st) => st.text_color(M.yellow))
-          .on_click((_e, cx) => { cx.stop_propagation(); this.found(k); })
-          .child(div().w(14).flex_none())
-          .child(div().w(TOWN).h(TOWN).flex_none().rounded(2).border(2).border_dashed().border_color(M.overlay0))
-          .child(div().text_size(TEXT).line_height(LH(TEXT)).child("+ THỊ TRẤN MỚI")),
-      );
+      const islandTitle = (k ? tr(`ĐẢO ${k.toUpperCase()}`, `ISLAND ${k.toUpperCase()}`) : tr("MÁY NÀY", "THIS MACHINE")) + (away.has(k) ? tr("  ·  mất liên lạc", "  ·  offline") : "");
+      const islandHead = h_flex()
+        .items_center()
+        .justify_between()
+        .gap(6)
+        .child(
+          h_flex()
+            .flex_1()
+            .min_w(0)
+            .items_center()
+            .gap(4)
+            .child(islandIcon(k, 12))
+            .child(div().flex_1().min_w(0).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.green).child(islandTitle)),
+        )
+        .child(
+          div()
+            .id("found-" + (k || "here"))
+            .flex_none()
+            .px(6)
+            .py(1)
+            .rounded(3)
+            .border(1)
+            .border_color(M.surface2)
+            .cursor_pointer()
+            .text_size(SMALL)
+            .font_family(FONT_SMALL)
+            .line_height(LH(SMALL))
+            .text_color(M.overlay1)
+            .hover((st) => st.bg(M.surface1).text_color(M.yellow).border_color(M.yellow))
+            .on_click((_e, cx) => { cx.stop_propagation(); this.found(k); })
+            .child(tr("+ THỊ TRẤN MỚI", "+ NEW TOWN")),
+        );
       return v_flex()
         .w(ISLAND_W)
         .flex_none()
@@ -135,7 +156,7 @@ export default class Role {
         .border(2)
         .border_color(M.green)
         .opacity(away.has(k) ? 0.5 : 1)
-        .child(div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.green).child((k ? `ĐẢO ${k.toUpperCase()}` : "MÁY NÀY") + (away.has(k) ? "  ·  mất liên lạc" : "")))
+        .child(islandHead)
         .child(col);
     });
 
@@ -163,18 +184,23 @@ export default class Role {
     // The top line: the town under the cursor.
     const agentsAt = at ? agents.filter((a) => a.space === at.id) : [];
     const word = at?.status ? STATUS[at.status]?.say : null;
+    const countText = tr(`${agentsAt.length} agent`, `${agentsAt.length} agent${agentsAt.length === 1 ? "" : "s"}`);
     const info = at
-      ? [`${agentsAt.length} agent`, word, folderName(at.folder), at.branch ? `nhánh ${at.branch}` : null].filter(Boolean).join("  ·  ")
+      ? [countText, word, folderName(at.folder), at.branch ? tr(`nhánh ${at.branch}`, `branch ${at.branch}`) : null].filter(Boolean).join("  ·  ")
       : "";
     const head = h_flex()
       .items_end()
       .gap(12)
-      .child(div().flex_none().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(M.yellow).child("BẢN ĐỒ"))
+      .child(div().flex_none().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(M.yellow).child(tr("BẢN ĐỒ", "TOWN MAP")))
       .child(div().flex_none().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(INK).child(at ? at.name.toUpperCase() : ""))
-      .child(div().flex_1().min_w(0).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).child(info));
+      .child(div().flex_1().min_w(0).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).child(info))
+      .when(Boolean(at && lootChips(at.id)), (e) => e.child(lootChips(at.id, SMALL)));
 
     const foot = div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.overlay1)
-      .child("↑↓ chọn thị trấn  ·  Enter đến đó  ·  N thị trấn mới  ·  Esc đóng");
+      .child(tr(
+        "↑↓ chọn thị trấn  ·  Enter đến đó  ·  N thị trấn mới  ·  Esc đóng",
+        "↑↓ select town  ·  Enter go there  ·  N new town  ·  Esc close",
+      ));
 
     return frame(v_flex().size_full().gap(10).child(head).child(sea).child(foot), { id: "map", full: true, pad: 12 })
       .track_focus(this.focus)

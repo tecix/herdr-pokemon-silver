@@ -8,22 +8,24 @@ import { div } from "gpui-kit";
 import { props, closeOverlay, run } from "herdr";
 import {
   frame, h_flex, v_flex, M, INK, DARK, PAPER, SELECT, FONT, TEXT, SMALL, BIG, FONT_SMALL, FONT_BIG, LH,
-  events, markRead, markAllRead, clearRead, unreadCount, agentList, agentName, mon, pokeball, glyph,
+  events, eventText, markRead, markAllRead, clearRead, unreadCount, agentList, agentName, mon, pokeball, glyph, tr,
 } from "./kit.js";
 
-const PILL = {
-  evolve: ["TIẾN HÓA!", M.yellow],
-  shiny: ["SHINY!", M.pink],
-  blocked: ["CHỜ", M.red],
-  done: ["XONG", M.green],
-};
+function pillOf(kind, past) {
+  if (past) return [tr("ĐÃ QUA", "PAST"), M.overlay1];
+  if (kind === "evolve") return [tr("TIẾN HÓA!", "EVOLVED!"), M.yellow];
+  if (kind === "shiny") return ["SHINY!", M.pink];
+  if (kind === "blocked") return [tr("CHỜ", "WAIT"), M.red];
+  if (kind === "done") return [tr("XONG", "DONE"), M.green];
+  return null;
+}
 
 function ago(at) {
   const min = Math.floor((Date.now() - at) / 60000);
-  if (min < 1) return "vừa xong";
-  if (min < 60) return `${min} phút trước`;
-  if (min < 24 * 60) return `${Math.floor(min / 60)} giờ trước`;
-  return `${Math.floor(min / 1440)} ngày trước`;
+  if (min < 1) return tr("vừa xong", "just now");
+  if (min < 60) return tr(`${min} phút trước`, `${min}m ago`);
+  if (min < 24 * 60) return tr(`${Math.floor(min / 60)} giờ trước`, `${Math.floor(min / 60)}h ago`);
+  return tr(`${Math.floor(min / 1440)} ngày trước`, `${Math.floor(min / 1440)}d ago`);
 }
 
 function pill(text, bg) {
@@ -63,7 +65,7 @@ export default class Role {
 
   row(e, all) {
     const who = e.address ? all.find((a) => a.address === e.address) : null;
-    const tag = e.kind === "blocked" && who?.status !== "blocked" ? ["ĐÃ QUA", M.overlay1] : PILL[e.kind];
+    const tag = pillOf(e.kind, e.kind === "blocked" && who?.status !== "blocked");
     const pic = div().w(40).h(30).flex_none().flex().items_center().justify_center()
       .child(who?.pane ? mon(who.pane, "icon", 30) : pokeball(14));
     let meta = h_flex().gap(6).items_center().min_w(0)
@@ -107,7 +109,7 @@ export default class Role {
       .child(div().w(8).h(8).flex_none().rounded(4).bg(e.read ? "#00000000" : M.mauve))
       .child(pic)
       .child(v_flex().flex_1().min_w(0).gap(1)
-        .child(div().min_w(0).truncate().text_size(TEXT).line_height(LH(TEXT)).text_color(e.read ? DARK : INK).child(e.text))
+        .child(div().min_w(0).truncate().text_size(TEXT).line_height(LH(TEXT)).text_color(e.read ? DARK : INK).child(eventText(e)))
         .child(meta))
       .child(check);
   }
@@ -120,23 +122,25 @@ export default class Role {
     const hasRead = list.some((e) => e.read);
 
     const head = h_flex().flex_none().items_end().gap(8)
-      .child(div().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(M.yellow).child("THÔNG BÁO"))
+      .child(div().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(M.yellow).child(tr("THÔNG BÁO", "INBOX")))
       .child(div().pb(2).text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK)
-        .child(unread ? `${unread} chưa đọc` : "đã đọc hết"))
+        .child(unread ? tr(`${unread} chưa đọc`, `${unread} unread`) : tr("đã đọc hết", "all read")))
       .child(div().flex_1())
       .child(div().id("ib-x").flex_none().px(6).text_color(DARK).cursor_pointer().hover((s) => s.text_color(INK))
         .on_click(() => this.close()).child("X"));
 
     const tools = h_flex().flex_none().gap(6).items_center()
-      .child(button("ib-all", "TẤT CẢ", (cx) => { this.only = false; cx.notify(); }, { on: !this.only }))
-      .child(button("ib-unread", `CHƯA ĐỌC (${unread})`, (cx) => { this.only = true; cx.notify(); }, { on: this.only }))
+      .child(button("ib-all", tr("TẤT CẢ", "ALL"), (cx) => { this.only = false; cx.notify(); }, { on: !this.only }))
+      .child(button("ib-unread", `${tr("CHƯA ĐỌC", "UNREAD")} (${unread})`, (cx) => { this.only = true; cx.notify(); }, { on: this.only }))
       .child(div().flex_1())
-      .child(button("ib-readall", "ĐỌC HẾT", (cx) => { markAllRead(); cx.notify(); }, { dim: !unread }))
-      .child(button("ib-clear", "XÓA ĐÃ ĐỌC", (cx) => { clearRead(); cx.notify(); }, { dim: !hasRead }));
+      .child(button("ib-readall", tr("ĐỌC HẾT", "READ ALL"), (cx) => { markAllRead(); cx.notify(); }, { dim: !unread }))
+      .child(button("ib-clear", tr("XÓA ĐÃ ĐỌC", "CLEAR READ"), (cx) => { clearRead(); cx.notify(); }, { dim: !hasRead }));
 
     const body = shown.length
       ? v_flex().gap(2).children(shown.map((e) => this.row(e, all)))
-      : div().p(12).text_color(DARK).child(this.only ? "Không còn thông báo chưa đọc." : "Chưa có thông báo nào.");
+      : div().p(12).text_color(DARK).child(this.only
+        ? tr("Không còn thông báo chưa đọc.", "No unread notifications.")
+        : tr("Chưa có thông báo nào.", "No notifications yet."));
 
     const content = v_flex().size_full().gap(8)
       .child(head)

@@ -15,6 +15,9 @@
 //   inbox   dialog: the notifications, mark read / all read (kit openInbox)
 //   agent   dialog: one agent's details and usage limits (kit openAgentInfo;
 //           right-click a party card, not its icon)
+//   town    dialog: one town's details (kit openTown; right-click a town row or map town)
+//   quest   dialog: each town's to-do list (the `todo` command) as quests (kit openQuest)
+//   bag     popup: items that send a preset command to one agent (kit openBag)
 //   fight   popup: a Pokémon's moves (kit openFight; right-click it on the
 //           field); the field plays the one picked (moves.js, fx.js)
 // With no role (herdr-app check), every role renders once, stacked, so a check
@@ -35,9 +38,13 @@ import Rename from "./rename.js";
 import Inbox from "./inbox.js";
 import AgentInfo from "./agent.js";
 import Fight from "./fight.js";
-import { syncZoom } from "./kit.js";
+import Stamina from "./stamina.js";
+import Quest from "./quest.js";
+import Bag from "./bag.js";
+import Town from "./town.js";
+import { syncZoom, syncTheme } from "./kit.js";
 
-const ROLES = { bar: Bar, party: Party, header: Header, dialog: Dialog, picker: Picker, field: Field, menu: Menu, trainer: Trainer, map: TownMap, rename: Rename, inbox: Inbox, agent: AgentInfo, fight: Fight };
+const ROLES = { bar: Bar, party: Party, header: Header, dialog: Dialog, picker: Picker, field: Field, menu: Menu, trainer: Trainer, map: TownMap, rename: Rename, inbox: Inbox, agent: AgentInfo, fight: Fight, stamina: Stamina, quest: Quest, bag: Bag, town: Town };
 
 export default class Pocket extends View {
   init(p, cx) {
@@ -53,6 +60,7 @@ export default class Pocket extends View {
 
   render(cx) {
     syncZoom(); // pixel font sizes follow settings zoom
+    syncTheme(); // the palette follows the shown theme (light/dark)
     if (this.missing) return div().child(`pocket: no role "${this.missing}"`);
     if (this.roles.length === 1) return this.roles[0].render(cx);
     return div().flex().flex_col().children(this.roles.map((r) => r.render(cx)));

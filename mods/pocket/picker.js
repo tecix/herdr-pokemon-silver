@@ -5,7 +5,7 @@
 import { div, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { props, closeOverlay } from "herdr";
-import { M, INK, DARK, PAPER, SELECT, FOCUS, FONT, TEXT, SMALL, BIG, monNameOf, pokeball, FONT_SMALL, LH, lhPx, FONT_BIG, crisp } from "./kit.js";
+import { M, INK, DARK, PAPER, SELECT, FOCUS, FONT, TEXT, SMALL, BIG, monNameOf, pokeball, FONT_SMALL, LH, lhPx, FONT_BIG, crisp, tr } from "./kit.js";
 import { COUNT, monOf, monName, setMon, ensureIcons, iconPath } from "./mons.js";
 
 // Numbers ("25", "#025") match the dex number; anything else matches the name
@@ -26,7 +26,7 @@ export default class Role {
     this.ready = false;
     this.error = null;
     this.filter = "";
-    this.input = InputState.new({ placeholder: "Tìm theo tên hoặc số…" });
+    this.input = InputState.new({ placeholder: tr("Tìm theo tên hoặc số…", "Search by name or number…") });
     this.input.on("change", (_e, cx) => {
       this.filter = this.input.value();
       cx.notify();
@@ -66,8 +66,8 @@ export default class Role {
     const iconW = (iconH * 4) / 3;
     const cellH = Math.ceil(iconH + 2 * lhPx(SMALL) + 2 * 2 + 4 + 8);
     const line = pane
-      ? `cho ${monNameOf(pane)} · #${String(current).padStart(3, "0")}`
-      : "chưa chọn agent nào";
+      ? tr(`cho ${monNameOf(pane)} · #${String(current).padStart(3, "0")}`, `for ${monNameOf(pane)} · #${String(current).padStart(3, "0")}`)
+      : tr("chưa chọn agent nào", "no agent selected");
 
     return v_flex()
       .size_full()
@@ -81,7 +81,7 @@ export default class Role {
         v_flex()
           .flex_none()
           .gap(2)
-          .child(div().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(M.yellow).child("CHỌN POKÉMON"))
+          .child(div().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(M.yellow).child(tr("CHỌN POKÉMON", "CHOOSE POKÉMON")))
           .child(div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).truncate().child(line)),
       )
       .child(
@@ -104,7 +104,7 @@ export default class Role {
             .text_size(SMALL).font_family(FONT_SMALL)
             .line_height(LH(SMALL))
             .text_color(M.red)
-            .child(`Không tải được biểu tượng (${this.error})`),
+            .child(tr(`Không tải được biểu tượng (${this.error})`, `Failed to load icons (${this.error})`)),
         ),
       )
       .child(

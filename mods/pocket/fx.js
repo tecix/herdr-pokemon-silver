@@ -14,10 +14,15 @@ function seeded(seed) {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
-export const TYPE_COLOR = {
-  N: M.text, F: M.peach, W: M.blue, G: M.green, E: M.yellow, I: M.sky, T: M.maroon, P: M.mauve,
-  D: M.peach, L: M.text, S: M.pink, B: M.green, R: M.overlay1, H: M.mauve, X: M.lavender,
+// Palette names, read at render time so the colors follow the theme.
+const TYPE_KEY = {
+  N: "text", F: "peach", W: "blue", G: "green", E: "yellow", I: "sky", T: "maroon", P: "mauve",
+  D: "peach", L: "text", S: "pink", B: "green", R: "overlay1", H: "mauve", X: "lavender",
 };
+export const TYPE_COLOR = Object.defineProperties(
+  {},
+  Object.fromEntries(Object.entries(TYPE_KEY).map(([k, name]) => [k, { get: () => M[name], enumerable: true }])),
+);
 
 // The parts of one cast.
 //   fx: { name, type, tier, at }

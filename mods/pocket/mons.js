@@ -19,8 +19,8 @@
 //                                          [{ id: "5h"|"7d"|"month"|…, used, resets_at }]
 //   "pocket.names" = { [pane id]: name }   a pane renamed from its header
 // Art = { front, front2, anim, anim2, icon, icon2 }: paths for image(), relative to the
-//   app home. front = Crystal front sprite (56px), anim = Crystal's animated
-//   one (GIF), *2 = pixel-doubled (112px), icon = the small menu icon (40x30), icon2 = it doubled (80x60).
+//   app home. front = Emerald front sprite (64px), anim = Emerald animated
+//   one (GIF), *2 = pixel-doubled (128px), icon = the small menu icon (40x30), icon2 = it doubled (80x60).
 //
 // Only ONE copy runs the loader (the dialog role: startLoader(cx) in init).
 
@@ -33,11 +33,11 @@ export const COUNT = 151;
 const REL = "data/pocket";
 const DATA = `${appHome()}/${REL}`;
 const SPRITES = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
-const CRYSTAL = `${SPRITES}/versions/generation-ii/crystal`;
+const EMERALD = `${SPRITES}/versions/generation-iii/emerald`;
 const ICONS = `${SPRITES}/versions/generation-vii/icons`;
 const PIXEL = `${appHome()}/mods/pocket/pixel.py`;
 const BBOX = `${appHome()}/mods/pocket/bbox.py`;
-const VERSION = 1;
+const VERSION = 2;
 
 export function monName(dex) {
   return (NAMES[dex - 1] ?? "MISSINGNO").toUpperCase();
@@ -149,18 +149,26 @@ export async function ensureArt(key) {
           m.art.icon2 = (await double(`${dir}/icon.png`, `${dir}/icon2.png`)) ? `${rel}/icon2.png` : m.art.icon;
           dirty = true;
         }
+        if (!m.art.version) { m.art.version = VERSION; dirty = true; }
         if (dirty) await fs.writeFile(metaFile, JSON.stringify(m));
         return m.art;
       }
     } catch {}
   }
   await fs.mkdir(dir, { recursive: true });
-  await curl([
-    [`${dir}/front.png`, `${CRYSTAL}/transparent/${sh}${dex}.png`],
-    [`${dir}/anim.gif`, `${CRYSTAL}/animated/${sh}${dex}.gif`],
-    [`${dir}/icon.png`, `${ICONS}/${dex}.png`],
-  ]);
-  const art = { front: `${rel}/front.png`, anim: `${rel}/anim.gif`, icon: `${rel}/icon.png`, front2: `${rel}/front.png`, anim2: `${rel}/anim.gif` };
+  const animRaw = `${dir}/anim_raw.png`;
+  try {
+    await curl([
+      [`${dir}/front.png`, `${EMERALD}/${sh}${dex}.png`],
+      [animRaw, `${EMERALD}/animated/${sh}${dex}.png`],
+      [`${dir}/icon.png`, `${ICONS}/${dex}.png`],
+    ]);
+    const r = await exec("python3", [PIXEL, animRaw, `${dir}/anim.gif`, "1"]);
+    if (r.code !== 0) throw new Error(`anim convert failed: ${r.stderr || r.code}`);
+  } finally {
+    await fs.unlink(animRaw).catch(() => {});
+  }
+  const art = { version: VERSION, front: `${rel}/front.png`, anim: `${rel}/anim.gif`, icon: `${rel}/icon.png`, front2: `${rel}/front.png`, anim2: `${rel}/anim.gif` };
   if (await double(`${dir}/front.png`, `${dir}/front2.png`)) art.front2 = `${rel}/front2.png`;
   if (await double(`${dir}/anim.gif`, `${dir}/anim2.gif`)) art.anim2 = `${rel}/anim2.gif`;
   art.icon2 = (await double(`${dir}/icon.png`, `${dir}/icon2.png`)) ? `${rel}/icon2.png` : art.icon;
@@ -321,8 +329,8 @@ export function screenFacts(key, text) {
       return { model: model.replace(PROVIDERS, "").trim(), effort: effortOf(m[2]) };
     }
   } else if (key === "antigravity") {
-    for (const l of bottom.slice(0, 3)) {
-      const m = l.match(new RegExp(`^\\s{8,}(\\S[^·]*?\\d[^·]*?)(?:\\s·\\s(${EFFORTS}))?$`, "i"));
+    for (const l of bottom.slice(0, 4)) {
+      const m = l.match(new RegExp(`(?:^\\s{8,}|\\s{4,})((?:Gemini|Claude|GPT|o\\d)\\b[^·]*?|\\S[^·]*?\\d[^·]*?)(?:\\s·\\s(${EFFORTS}))?$`, "i"));
       if (m) return { model: m[1].trim(), effort: effortOf(m[2]) };
     }
   } else if (key === "codex") {
@@ -344,16 +352,26 @@ export function screenFacts(key, text) {
 const INFO = `${appHome()}/mods/pocket/agent-info.py`;
 const USAGE = `${appHome()}/mods/pocket/usage5h.py`;
 const OPENCODE_QUOTA = `${appHome()}/mods/over9k-usage/opencode-quota.py`;
+const AGY_STATUS = `${appHome()}/mods/pocket/agy-statusline.sh`;
+const AGY_TITLE = `${appHome()}/mods/pocket/agy-title.sh`;
 // A usage window's id from its name: "5h", "5-hour", "five_hour" -> "5h";
+// "5h:Gemini" -> "5h:Gemini", "5h:Other" / "5h 3rd party" -> "5h:Other";
 // "7d", "Weekly (all models)" -> "7d"; "Weekly (Opus)" -> "7d:Opus";
 // "Month" -> "month"; anything else stays as it is.
 export function windowId(name) {
   const n = String(name ?? "").trim();
-  const extra = (n.match(/\(([^)]*)\)/)?.[1] ?? "").trim();
+  const colon = n.indexOf(":");
+  const head = colon >= 0 ? n.slice(0, colon).trim() : n;
+  let extra = colon >= 0 ? n.slice(colon + 1).trim() : (n.match(/\(([^)]*)\)/)?.[1] ?? "").trim();
+  if (!extra && /\b(3rd[- ]?party|claude|gpt)\b/i.test(n)) extra = "Other";
+  if (!extra && /\bargon\b/i.test(n)) extra = "Argon";
+  if (/^(3p|3rd[- ]?party|other)$/i.test(extra)) extra = "Other";
+  else if (/^gemini$/i.test(extra)) extra = "Gemini";
+  else if (/^argon/i.test(extra)) extra = "Argon";
   const tail = extra && !/^all\b/i.test(extra) ? ":" + extra : "";
-  if (/^(5[- ]?h|five)/i.test(n)) return "5h" + tail;
-  if (/^(7[- ]?d|seven|week)/i.test(n)) return "7d" + tail;
-  if (/^month/i.test(n)) return "month" + tail;
+  if (/^(5[- ]?h|five)/i.test(head)) return "5h" + tail;
+  if (/^(7[- ]?d|seven|week)/i.test(head)) return "7d" + tail;
+  if (/^month/i.test(head)) return "month" + tail;
   return n;
 }
 // One product's new usage over the last one seen: an idle Claude session can
@@ -362,7 +380,7 @@ export function windowId(name) {
 const sameWindow = (a, b) => a && b && a.resets_at && b.resets_at && Math.abs(a.resets_at - b.resets_at) < 300;
 function keepHighest(old, v) {
   if (!old || !v) return v;
-  const next = { ...v };
+  const next = { ...v, ...(v.plan || !old.plan ? {} : { plan: old.plan }) };
   if (sameWindow(old, v) && Number(old.used) > Number(v.used)) next.used = old.used;
   if (Array.isArray(v.windows)) {
     next.windows = v.windows.map((w) => {
@@ -375,7 +393,26 @@ function keepHighest(old, v) {
 
 export function startLoader(cx) {
   const failedAt = {};
-  // HP: each machine's 5-hour usage per product, every minute (usage5h.py,
+  // Ensure Antigravity CLI's statusLine/title helper points to Pocket's persistent tracker.
+  cx.spawn(async () => {
+    try {
+      await exec("sh", ["-c", `
+        ad="$HOME/.gemini/antigravity-cli"
+        as="$ad/settings.json"
+        [ -d "$ad" ] && command -v jq >/dev/null 2>&1 || exit 0
+        [ -s "$as" ] || echo '{}' > "$as"
+        cur=$(jq -r '.statusLine.command // ""' "$as" 2>/dev/null)
+        case "$cur" in
+          ""|*agy-statusline.sh*)
+            jq --arg s "sh \\"${AGY_STATUS}\\"" --arg t "sh \\"${AGY_TITLE}\\"" \
+              '.statusLine = {type: "command", command: $s, stack_with_default: true} | .title = {type: "command", command: $t}' \
+              "$as" > "$as.tmp" && mv "$as.tmp" "$as" || rm -f "$as.tmp"
+            ;;
+        esac
+      `]).catch(() => null);
+    } catch {}
+  });
+  // HP: each machine's 5-hour & weekly usage per product, every minute (usage5h.py,
   // plus over9k-usage's opencode-quota.py where OpenCode runs).
   cx.spawn(async (cx) => {
     for (;;) {
@@ -384,7 +421,11 @@ export function startLoader(cx) {
         const oc = await fs.readFile(OPENCODE_QUOTA, "utf8").catch(() => null);
         const was = shared("pocket.hp") ?? {};
         const next = {};
-        const byMachine = new Map();
+        const byMachine = new Map([["", new Set()]]);
+        for (const s of spaces()) {
+          const m = s.machine ?? "";
+          if (!byMachine.has(m)) byMachine.set(m, new Set());
+        }
         for (const a of agentList()) {
           const m = a.address?.includes("/") ? a.address.split("/")[0] : "";
           if (!byMachine.has(m)) byMachine.set(m, new Set());
@@ -401,7 +442,7 @@ export function startLoader(cx) {
               for (const [k, v] of Object.entries(JSON.parse(r?.stdout || "{}"))) got[k] = keepHighest(got[k], v);
             } catch {}
           }
-          if (oc && keys.has("opencode")) {
+          if (oc && (keys.has("opencode") || m === "")) {
             const r = await exec("python3", ["-c", oc], on).catch(() => null);
             try {
               const q = JSON.parse(r?.stdout || "null");
@@ -414,9 +455,11 @@ export function startLoader(cx) {
                 else if (Number(x.used) > Number(had.used)) had.used = x.used;
               }
               const five = windows.find((w) => w.id === "5h");
+              const plan = q?.go?.plan ?? q?.current?.plan ?? null;
               if (windows.length) {
                 got.opencode = keepHighest(got.opencode, {
                   ...(five ? { used: five.used, resets_at: five.resets_at } : {}),
+                  ...(plan ? { plan } : {}),
                   at: Math.round(Date.now() / 1000), windows,
                 });
               }
@@ -497,7 +540,7 @@ export function startLoader(cx) {
         for (const d of Object.values(shared("pocket.extra") ?? {})) need.add(d);
         for (const d of need) {
           const art = shared("pocket.art")?.[d];
-          if (art && art !== "error" && art.box && art.icon2) continue;
+          if (art && art !== "error" && art.version === VERSION && art.box && art.icon2) continue;
           if (art === "error" && Date.now() - (failedAt[d] ?? 0) < 60000) continue;
           let next;
           try {

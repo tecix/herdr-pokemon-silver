@@ -4,12 +4,14 @@
 // Ported from the strip part of mathieucroset/herdr-pokemon-agents (MIT).
 // Right-click a Pokémon: its moves (role "fight"); the one picked plays here
 // (shared "pocket.fx", drawn by fx.js), the Pokémon stopping for it.
+// Behind them, the shown town's backdrop (scene.js): one biome per town.
 import { div, image } from "gpui-kit";
-import { run, settings } from "herdr";
+import { run, settings, shared, setShared } from "herdr";
 import { monKey, walkOf } from "./mons.js";
-import { frame, h_flex, FONT, SMALL, DARK, INK, M, STATUS_COLOR, agentName, moodOf, moodBubble, monNameOf, openFight, pokeball, agentList, FONT_SMALL, LH } from "./kit.js";
+import { frame, h_flex, FONT, SMALL, DARK, INK, M, STATUS_COLOR, agentName, moodOf, moodBubble, monNameOf, openFight, pokeballStill, agentList, FONT_SMALL, LH, tr } from "./kit.js";
 import { lastCast } from "./moves.js";
 import { effectOf, fxDuration, TYPE_COLOR } from "./fx.js";
+import { activeTown, biomeOf, buildScene, scenery } from "./scene.js";
 
 const SLOT = 128; // one Pokémon's column (sprite + name tag)
 const GROUND = 24; // the ground line, px above the strip's bottom (room for the name tag)
@@ -28,25 +30,15 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 const zoom = () => (Number(settings()?.zoom) > 0 ? Number(settings().zoom) : 1);
 
-// Grass tufts at fixed, pseudo-random spots (seeded, so they never move).
-function grass(n) {
-  let s = 7;
-  const next = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  return Array.from({ length: n }, () => ({
-    f: next(), // fraction of the strip's width
-    w: 2 + Math.floor(next() * 2),
-    h: 2 + Math.floor(next() * 2),
-    c: next() < 0.5 ? M.green : M.teal,
-  }));
-}
-
 export default class Role {
   init(_props, cx) {
     this.width = DEFAULT_W;
     this.height = DEFAULT_H;
     this.mons = {}; // address -> { x, from, target, dir, moving, start, dur, pauseUntil, mood }
     this.hover = null;
-    this.tufts = grass(6);
+    this.fieldHovered = false;
+    this.pops = [];
+    this.scene = null; // the backdrop of the shown town (scene.js), rebuilt when the town changes
     // The move being played: { address, name, type, tier, at, phase 0|1 }.
     // Casts from before this view started are not replayed.
     this.fx = null;
@@ -73,6 +65,26 @@ export default class Role {
       }
       const mood = moodOf(a);
       if (mood !== m.mood) { m.mood = mood; m.tidy = false; changed = true; }
+
+      const meta = walkOf(monKey(a.pane));
+      if (!meta) {
+        // Art still downloading: keep Poké Ball fixed in place, do not walk.
+        m.wasBall = true;
+        if (m.moving) {
+          m.x = m.target = m.from;
+          m.moving = false;
+          m.dur = 0;
+          changed = true;
+        }
+        return;
+      }
+      if (m.wasBall) {
+        m.wasBall = false;
+        const G = this.height - GROUND;
+        this.spawnPop(cx, m.x, G - POKEBALL / 2);
+        changed = true;
+      }
+
       const roams = mood === "walk" || mood === "rest";
 
       if (m.moving) {
@@ -127,7 +139,23 @@ export default class Role {
     });
     for (const k of Object.keys(this.mons)) if (!live.has(k)) { delete this.mons[k]; changed = true; }
     if (this.startCast(cx, now)) changed = true;
+    if (this.townKey() !== this.scene?.key) changed = true; // another town: another backdrop
     if (changed) cx.notify();
+  }
+
+  // The shown town's biome + key; the scene is rebuilt when it changes.
+  townKey() {
+    const t = activeTown();
+    return `${biomeOf(t)}|${t.key}`;
+  }
+
+  currentScene() {
+    const key = this.townKey();
+    if (this.scene?.key !== key) {
+      const t = activeTown();
+      this.scene = { key, ...buildScene(biomeOf(t), t.key) };
+    }
+    return this.scene;
   }
 
   // A new cast (moves.js castMove): stop that Pokémon where it is, draw the
@@ -155,6 +183,21 @@ export default class Role {
       if (this.fx?.at === c.at) { this.fx = null; cx.notify(); }
     });
     return true;
+  }
+
+  // A brief white circle grows and fades where a Poké Ball just opened into art.
+  spawnPop(cx, x, y) {
+    const id = Date.now() + Math.random();
+    const pop = { id, x, y, phase: 0 };
+    this.pops.push(pop);
+    cx.timer.after(30, (cx) => {
+      pop.phase = 1;
+      cx.notify();
+    });
+    cx.timer.after(350, (cx) => {
+      this.pops = this.pops.filter((p) => p.id !== id);
+      cx.notify();
+    });
   }
 
   // Of a few random spots at least 60px away, the one farthest from the other
@@ -185,6 +228,7 @@ export default class Role {
     const G = H - GROUND; // the ground line's top
     const now = Date.now();
     const list = agentList();
+    const plain = Boolean(shared("pocket.field.plain"));
 
     let root = div()
       .id("field-root")
@@ -201,17 +245,82 @@ export default class Role {
           cx.notify();
         }
       })
-      .child(div().absolute().left(0).right(0).top(G).h(2).bg(M.surface1));
-    for (const t of this.tufts) {
-      root = root.child(div().absolute().left(t.f * W).top(G - t.h).w(t.w).h(t.h).bg(t.c));
+      .on_hover((h, cx) => {
+        if (this.fieldHovered !== h) {
+          this.fieldHovered = h;
+          cx.notify();
+        }
+      });
+
+    if (!plain) {
+      root = root.children(scenery(this.currentScene(), W, H, G));
     }
+
+    const bgBtn = div()
+      .id("field-btn-bg")
+      .flex_none()
+      .h(18)
+      .px(5)
+      .flex()
+      .items_center()
+      .justify_center()
+      .rounded(3)
+      .border(1)
+      .border_color(!plain ? M.mauve : M.surface2)
+      .when(!plain, (s) => s.bg(M.surface1))
+      .text_color(!plain ? INK : DARK)
+      .text_size(SMALL)
+      .font_family(FONT_SMALL)
+      .line_height(LH(SMALL))
+      .cursor_pointer()
+      .hover((s) => s.bg(M.surface1).border_color(M.mauve).text_color(INK))
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_click((_e, cx) => {
+        setShared("pocket.field.plain", !plain);
+        cx?.notify?.();
+      })
+      .child(tr("NỀN", "BG"));
+
+    const hideBtn = div()
+      .id("field-btn-hide")
+      .flex_none()
+      .h(18)
+      .px(5)
+      .flex()
+      .items_center()
+      .justify_center()
+      .rounded(3)
+      .border(1)
+      .border_color(M.surface2)
+      .text_color(DARK)
+      .text_size(SMALL)
+      .font_family(FONT_SMALL)
+      .line_height(LH(SMALL))
+      .cursor_pointer()
+      .hover((s) => s.bg(M.surface1).border_color(M.sapphire).text_color(INK))
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_click(() => run("layout.hide", { id: "bottom" }))
+      .child("▼");
+
+    const optRow = h_flex()
+      .id("field-options")
+      .absolute()
+      .top(4)
+      .right(6)
+      .gap(4)
+      .items_center()
+      .opacity(this.fieldHovered ? 1 : 0.45)
+      .transition("opacity", { duration: 150 })
+      .hover((s) => s.opacity(1))
+      .child(bgBtn)
+      .child(hideBtn);
 
     if (list.length === 0) {
       root = root.child(
         div().absolute().left(0).top(0).w_full().h(G).flex().items_center().justify_center().px(8)
           .text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).text_center()
-          .child("Chưa có Pokémon nào. Mỗi agent bạn mở sẽ xuất hiện ở đây."),
-      );
+          .child(tr("Chưa có Pokémon nào. Mỗi agent bạn mở sẽ xuất hiện ở đây.", "No Pokémon yet. Every agent you open will appear here.")),
+      ).child(optRow);
       return frame(root, { full: true, pad: 0 });
     }
 
@@ -238,6 +347,21 @@ export default class Role {
         showTag.add(a.address);
       }
     }
+
+    // A single unified scale factor for all Pokémon in the field so that all
+    // Pokémon remain in exact relative proportion to each other, scaling up
+    // uniformly when the bottom bar is taller.
+    const avail = Math.max(20, G - 20);
+    let maxTallest = 56; // baseline reference for standard tall Pokémon
+    for (const a of list) {
+      const meta = walkOf(monKey(a.pane));
+      if (meta) {
+        const sc = (meta.scale ?? 2) / 2;
+        const t = Math.max(...WALKS.map((k) => meta[k].box.h)) / sc;
+        if (t > maxTallest) maxTallest = t;
+      }
+    }
+    const sharedScale = avail / maxTallest;
 
     // Left to right, so a Pokémon on the right overlaps one on the left, not the other way round.
     for (const a of [...list].sort((x, y) => pos(x) - pos(y))) {
@@ -270,9 +394,8 @@ export default class Role {
 
       let headY = G - POKEBALL;
       if (meta) {
-        // One scale for all its animations, so it doesn't jump between them. Big ones shrink to fit above the ground.
-        const tallest = Math.max(...WALKS.map((k) => meta[k].box.h));
-        const k = Math.min(1, (G - 22) / tallest);
+        const sc = (meta.scale ?? 2) / 2;
+        const k = sharedScale / sc;
         const s = mood === "sleep" && !m.moving ? meta.sleep
           : m.moving ? (m.dir === "r" ? meta.walkR : meta.walkL)
           : (m.dir === "r" ? meta.idleR : meta.idleL);
@@ -290,10 +413,36 @@ export default class Role {
           .child(div().absolute().left(SLOT / 2 - shadowW / 2).top(G - 4).w(shadowW).h(6).rounded_full().bg(M.crust).opacity(0.35))
           .child(withMotion(image(s.path).absolute().left(left).top(top).w(s.w * k).h(s.h * k), fx, m, { left, top }));
       } else {
-        // Art still downloading: a Poké Ball waits in its place.
-        col = col
-          .child(div().absolute().left(SLOT / 2 - 10).top(G - 4).w(20).h(6).rounded_full().bg(M.crust).opacity(0.35))
-          .child(div().absolute().left(SLOT / 2 - POKEBALL / 2).top(G - POKEBALL).child(pokeball(POKEBALL)));
+        // Art still downloading: a Poké Ball waits in its place, wiggling in place.
+        const shadow = div()
+          .absolute()
+          .left(SLOT / 2 - 10)
+          .top(G - 4)
+          .w(20)
+          .h(6)
+          .rounded_full()
+          .bg(M.crust)
+          .opacity(0.35)
+          .loop("opacity", { from: 0.2, to: 0.4, period: 1000 });
+
+        const ball = div()
+          .absolute()
+          .left(SLOT / 2 - POKEBALL / 2)
+          .top(G - POKEBALL)
+          .loop("top", { from: G - POKEBALL, to: G - POKEBALL - 3, period: 1000, easing: "ease-out" })
+          .child(
+            div()
+              .relative()
+              .loop("left", { from: -2, to: 2, period: 200, easing: "ease-in-out" })
+              .child(
+                div()
+                  .relative()
+                  .loop("left", { from: -1, to: 1, period: 250, easing: "ease-in-out" })
+                  .child(pokeballStill(POKEBALL))
+              )
+          );
+
+        col = col.child(shadow).child(ball);
         geo = { w: POKEBALL, h: POKEBALL };
       }
 
@@ -341,6 +490,29 @@ export default class Role {
       );
     }
 
+    for (const p of this.pops) {
+      const on = p.phase === 1;
+      const size = on ? 36 : 14;
+      root = root.child(
+        div()
+          .id(`pop-${p.id}`)
+          .absolute()
+          .left(p.x - size / 2)
+          .top(p.y - size / 2)
+          .w(size)
+          .h(size)
+          .rounded_full()
+          .bg("#ffffff")
+          .opacity(on ? 0 : 0.9)
+          .transition("left", { duration: 300, easing: "ease-out" })
+          .transition("top", { duration: 300, easing: "ease-out" })
+          .transition("width", { duration: 300, easing: "ease-out" })
+          .transition("height", { duration: 300, easing: "ease-out" })
+          .transition("opacity", { duration: 300, easing: "ease-out" }),
+      );
+    }
+
+    root = root.child(optRow);
     return frame(root, { full: true, pad: 0 });
   }
 }

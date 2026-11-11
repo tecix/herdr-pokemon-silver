@@ -1,7 +1,10 @@
 {
   "id": "root",
   "type": "column",
-  "theme": "pocket",
+  "theme": {
+    "light": "pocket-light",
+    "dark": "pocket"
+  },
   "font": "JetBrains Mono",
   "font_size": 14,
   "ui_font": "Galmuri11",
@@ -15,7 +18,7 @@
     12,
     9
   ],
-  "background": "#1e2030",
+  "background": "canvas",
   "preview": "layouts/pocket.svg",
   "children": [
     {
@@ -64,14 +67,14 @@
             "pane": {
               "gap": 8,
               "radius": 4,
-              "background": "#24273a",
+              "background": "background",
               "border": {
                 "width": 2,
-                "color": "#5b6078"
+                "color": "border"
               },
               "focus": {
                 "width": 2,
-                "color": "#c6a0f6"
+                "color": "accent"
               },
               "header": {
                 "content": {
@@ -96,6 +99,8 @@
       "size": {
         "px": 124
       },
+      "min": 80,
+      "max": 400,
       "gap": 0,
       "children": [
         {

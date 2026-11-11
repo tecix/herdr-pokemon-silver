@@ -6,8 +6,8 @@
 
 import { div } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { panes, props, run, home } from "herdr";
-import { FONT, TEXT, SMALL, M, INK, DARK, PAPER, SELECT, FOCUS, sprite, spriteKey, pokeballStill, mon, monNameOf, levelOf, hpOf, bar, glyph, openRename, paneName, agentName, moodOf, moodBubble, agentList, modelBadge, condition, FONT_SMALL, LH } from "./kit.js";
+import { panes, props, run, home, shared, setShared } from "herdr";
+import { FONT, TEXT, SMALL, M, INK, DARK, PAPER, SELECT, FOCUS, sprite, spriteKey, pokeballStill, mon, monNameOf, levelOf, hpOf, bar, glyph, openRename, paneName, agentName, moodOf, moodBubble, agentList, modelBadge, condition, FONT_SMALL, LH, tr } from "./kit.js";
 
 // Gaps and sizes, shared by both headers so the items line up the same way.
 const GAP = 6;
@@ -101,7 +101,8 @@ export default class Role {
 
   render(cx) {
     const pane = props()?.pane;
-    const p = panes().find((x) => x.pane === pane);
+    const allPanes = panes() ?? [];
+    const p = allPanes.find((x) => x.pane === pane);
     if (!p) return div();
 
     const focused = Boolean(p.focused);
@@ -113,10 +114,61 @@ export default class Role {
       ? listed ?? { address: p.terminal, pane: p.pane, tab: p.tab, title: p.title, status: p.status, program: p.program }
       : null;
 
+    let paneRoles = shared("pocket.pane.roles") ?? {};
+    let rolesChanged = false;
+
+    // Prune stale role entries: drop keys of pocket.pane.roles whose pane no longer exists in panes()
+    const livePaneIds = new Set(allPanes.map((x) => x.pane));
+    const prunedRoles = {};
+    for (const [k, v] of Object.entries(paneRoles)) {
+      if (livePaneIds.has(k)) {
+        prunedRoles[k] = v;
+      } else {
+        rolesChanged = true;
+      }
+    }
+    if (rolesChanged) {
+      paneRoles = prunedRoles;
+    }
+
+    const pending = shared("pocket.pane.pending");
+    if (
+      p.mod === "pocket" &&
+      !paneRoles[p.pane] &&
+      pending &&
+      pending.role &&
+      typeof pending.at === "number" &&
+      Date.now() - pending.at < 10000 &&
+      !(pending.before ?? []).includes(p.pane)
+    ) {
+      paneRoles = { ...paneRoles, [p.pane]: pending.role };
+      rolesChanged = true;
+      setShared("pocket.pane.pending", null);
+    }
+
+    if (rolesChanged) {
+      setShared("pocket.pane.roles", paneRoles);
+    }
+
     let kids;
-    if (p.mod) kids = [div().flex_1().min_w(0).truncate().child(paneName(p.pane) || p.title)];
-    else if (a) kids = agentKids(a, p.pane);
-    else kids = shellKids(p);
+    const role = paneRoles[p.pane] ?? (shared("pocket.stamina.pane") === p.pane ? "stamina" : null);
+    if (role === "stamina") {
+      kids = [
+        div().flex_none().text_color(M.yellow).child(glyph("badge", 12)),
+        div().flex_1().min_w(0).truncate().text_color(M.yellow).child(paneName(p.pane) || tr("THỂ LỰC · STAMINA", "STAMINA")),
+      ];
+    } else if (role === "quest") {
+      kids = [
+        div().flex_none().text_color(M.yellow).child(glyph("badge", 12)),
+        div().flex_1().min_w(0).truncate().text_color(M.yellow).child(paneName(p.pane) || tr("NHIỆM VỤ · QUEST LOG", "QUEST LOG")),
+      ];
+    } else if (p.mod) {
+      kids = [div().flex_1().min_w(0).truncate().child(paneName(p.pane) || p.title)];
+    } else if (a) {
+      kids = agentKids(a, p.pane);
+    } else {
+      kids = shellKids(p);
+    }
 
     const buttons = this.hovered
       ? [

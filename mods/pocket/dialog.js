@@ -3,28 +3,30 @@
 import { div } from "gpui-kit";
 import { run } from "herdr";
 import { startLoader } from "./mons.js";
-import { frame, h_flex, v_flex, FONT, TEXT, SMALL, BIG, DARK, INK, M, agentName, events, trackAgents, glyph, blink, mon, monFit, pokeball, agentList, FONT_SMALL, LH, FONT_BIG, monNameOf, hpOf, bar, cursor, markRead, unreadCount, openInbox } from "./kit.js";
+import { startGitLoot } from "./gitloot.js";
+import { frame, h_flex, v_flex, FONT, TEXT, SMALL, BIG, DARK, INK, M, agentName, events, eventText, trackAgents, glyph, blink, mon, monFit, pokeball, agentList, FONT_SMALL, LH, FONT_BIG, monNameOf, hpOf, bar, cursor, markRead, unreadCount, openInbox, dismissEvent, tr } from "./kit.js";
 
-const PIC = 56; // the Pokémon's box, on the left of the text
+const PIC = 64; // the Pokémon's box, on the left of the text (Gen 3 art 64px)
 const INTRO = 900; // the encounter's flash, ms, before the text types
 
-// Time since `at`, in Vietnamese.
+// Time since `at`.
 function ago(at) {
   const min = Math.floor((Date.now() - at) / 60000);
-  if (min < 1) return "vừa xong";
-  if (min < 60) return `${min} phút trước`;
-  return `${Math.floor(min / 60)} giờ trước`;
+  if (min < 1) return tr("vừa xong", "just now");
+  if (min < 60) return tr(`${min} phút trước`, `${min}m ago`);
+  return tr(`${Math.floor(min / 60)} giờ trước`, `${Math.floor(min / 60)}h ago`);
 }
 
 // Event kind -> the pill's words and color (Gen 2 tag look). A "blocked" event
 // whose agent no longer waits shows PAST instead.
-const PILL = {
-  evolve: ["TIẾN HÓA!", M.yellow],
-  shiny: ["SHINY!", M.pink],
-  blocked: ["CHỜ", M.red],
-  done: ["XONG", M.green],
-};
-const PAST = ["ĐÃ QUA", M.overlay1];
+function pillOf(kind, past) {
+  if (past) return [tr("ĐÃ QUA", "PAST"), M.overlay1];
+  if (kind === "evolve") return [tr("TIẾN HÓA!", "EVOLVED!"), M.yellow];
+  if (kind === "shiny") return ["SHINY!", M.pink];
+  if (kind === "blocked") return [tr("CHỜ", "WAIT"), M.red];
+  if (kind === "done") return [tr("XONG", "DONE"), M.green];
+  return null;
+}
 
 function pill(text, bg) {
   return div()
@@ -41,6 +43,7 @@ function pill(text, bg) {
 export default class Role {
   init(_props, cx) {
     startLoader(cx); // the one copy that fetches Pokémon art (mons.js)
+    startGitLoot(cx); // each town's git state -> shared pocket.git (gitloot.js)
     this.memo = {};
     this.index = 0; // 0 = newest event
     this.msgKey = null; // the message on screen (id + text)
@@ -86,15 +89,21 @@ export default class Role {
     let kind = null;
     if (list.length) {
       const e = list[this.index];
-      text = e.text;
+      text = eventText(e);
       id = e.id;
       address = e.address ?? null;
       at = e.at;
       kind = e.kind ?? null;
     } else {
       text = all.length
-        ? `Chào mừng! Đội của bạn có ${all.length} thành viên.`
-        : "Chào mừng! Mở một agent để bắt đầu hành trình.";
+        ? tr(
+            `Chào mừng! Đội của bạn có ${all.length} thành viên.`,
+            `Welcome! Your party has ${all.length} member${all.length === 1 ? "" : "s"}.`,
+          )
+        : tr(
+            "Chào mừng! Mở một agent để bắt đầu hành trình.",
+            "Welcome! Open an agent to start your journey.",
+          );
       id = "welcome";
     }
 
@@ -126,7 +135,7 @@ export default class Role {
     }
 
     const unread = unreadCount();
-    const meta = [at != null ? ago(at) : null, list.length ? `${this.index + 1}/${list.length}` : null, unread ? `${unread} chưa đọc` : null]
+    const meta = [at != null ? ago(at) : null, list.length ? `${this.index + 1}/${list.length}` : null, unread ? tr(`${unread} chưa đọc`, `${unread} unread`) : null]
       .filter(Boolean)
       .join("  ·  ");
 
@@ -148,7 +157,7 @@ export default class Role {
       .cursor_pointer()
       .on_click((_e, cx) => { cx.stop_propagation(); openInbox(); })
       .child(div().min_w(0).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).child(meta));
-    const tag = kind === "blocked" && who?.status !== "blocked" ? PAST : PILL[kind];
+    const tag = pillOf(kind, kind === "blocked" && who?.status !== "blocked");
     if (tag) metaRow = metaRow.child(pill(tag[0], tag[1]));
 
     const column = v_flex()
@@ -180,8 +189,9 @@ export default class Role {
     }
 
     // A click on the box itself (not on the message or the arrow) goes back to
-    // the newest event, but only from the oldest one.
-    return frame(row, { id: "dlg", full: true, size: BIG, pad: 8 })
+    // the newest event, but only from the oldest one. A right-click dismisses
+    // the event on screen (the next older one shows, or the welcome).
+    let box = frame(row, { id: "dlg", full: true, size: BIG, pad: 8 })
       .font_family(FONT)
       .on_click((_e, cx) => {
         const n = events().length;
@@ -190,6 +200,14 @@ export default class Role {
           cx.notify();
         }
       });
+    if (id !== "welcome") {
+      box = box.on_mouse_down("right", (_e, cx) => {
+        cx.stop_propagation();
+        dismissEvent(id);
+        cx.notify();
+      });
+    }
+    return box;
   }
 
   // The encounter, Gen 2 style: the screen flashes, the Pokémon slides in on
@@ -197,8 +215,9 @@ export default class Role {
   // then a menu: TRẢ LỜI (go to the agent) or CHẠY (back to the events until
   // it waits again). More than one waiting: the first, and how many more.
   encounter(foe, count) {
-    const key = `enc-${foe.address}`;
-    const title = `${foe.pane ? monNameOf(foe.pane) : agentName(foe).toUpperCase()} hoang dã xuất hiện!`;
+    const foeName = foe.pane ? monNameOf(foe.pane) : agentName(foe).toUpperCase();
+    const title = tr(`${foeName} hoang dã xuất hiện!`, `Wild ${foeName} appeared!`);
+    const key = `enc-${foe.address}\n${title}`;
     if (this.encKey !== key) {
       this.encKey = key;
       this.msgKey = key;
@@ -241,7 +260,7 @@ export default class Role {
       .on_hover((h, cx) => { if (h && this.choice !== i) { this.choice = i; cx.notify(); } })
       .on_click((_e, cx) => { cx.stop_propagation(); act(cx); });
 
-    const more = count > 1 ? `  ·  còn ${count - 1} agent chờ nữa` : "";
+    const more = count > 1 ? tr(`  ·  còn ${count - 1} agent chờ nữa`, `  ·  ${count - 1} more waiting`) : "";
     const column = v_flex()
       .flex_1()
       .min_w(0)
@@ -249,15 +268,18 @@ export default class Role {
       .gap(2)
       .child(div().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(INK).child(typed || " "))
       .child(div().min_w(0).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK)
-        .child(ready ? `${agentName(foe)} đang chờ bạn trả lời${more}` : " "))
+        .child(ready ? tr(`${agentName(foe)} đang chờ bạn trả lời${more}`, `${agentName(foe)} is waiting for your reply${more}`) : " "))
       .child(h_flex().gap(14).items_center().opacity(ready ? 1 : 0)
-        .child(option(0, "TRẢ LỜI", () => answer()))
-        .child(option(1, "CHẠY", (cx) => flee(cx))));
+        .child(option(0, tr("TRẢ LỜI", "REPLY"), () => answer()))
+        .child(option(1, tr("CHẠY", "RUN"), (cx) => flee(cx))));
 
     let body = h_flex().relative().size_full().gap(10).items_center().child(left).child(column);
     // The flash: the box blinks light before the Pokémon shows.
     if (intro) body = body.child(div().absolute().left(0).top(0).size_full().bg(M.text).loop("opacity", { from: 0, to: 0.85, period: 220 }));
 
-    return frame(body, { id: "dlg", full: true, size: BIG, pad: 8, edge: M.red }).font_family(FONT);
+    // A right-click anywhere on the box runs, like CHẠY.
+    return frame(body, { id: "dlg", full: true, size: BIG, pad: 8, edge: M.red })
+      .font_family(FONT)
+      .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); flee(cx); });
   }
 }

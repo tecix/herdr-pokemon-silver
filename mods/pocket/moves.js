@@ -11,6 +11,7 @@
 // one); the field watches it and draws the effect over that Pokémon.
 import { shared, setShared } from "herdr";
 import { monOf, shinyOf, stageOf } from "./mons.js";
+import { isEn } from "./kit.js";
 
 // Gen 1 types per dex (1..151), two letters at most: primary then secondary.
 // N normal, F fire, W water, G grass, E electric, I ice, T fighting, P poison,
@@ -45,6 +46,13 @@ export const TYPE_NAME = {
   N: "THƯỜNG", F: "LỬA", W: "NƯỚC", G: "CỎ", E: "ĐIỆN", I: "BĂNG", T: "GIÁC ĐẤU", P: "ĐỘC",
   D: "ĐẤT", L: "BAY", S: "SIÊU LINH", B: "BỌ", R: "ĐÁ", H: "MA", X: "RỒNG",
 };
+export const TYPE_NAME_EN = {
+  N: "NORMAL", F: "FIRE", W: "WATER", G: "GRASS", E: "ELECTRIC", I: "ICE", T: "FIGHTING", P: "POISON",
+  D: "GROUND", L: "FLYING", S: "PSYCHIC", B: "BUG", R: "ROCK", H: "GHOST", X: "DRAGON",
+};
+export function typeName(t) {
+  return (isEn() ? TYPE_NAME_EN[t] : TYPE_NAME[t]) ?? t;
+}
 
 // The ones known for a move of their own: [name, type] in order; null keeps
 // the type's move in that slot.

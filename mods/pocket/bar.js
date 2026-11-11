@@ -9,16 +9,18 @@
 // status is a 6px dot (blocked blinks). Badges are gym badges, earned ones in
 // rotating colors.
 import { div } from "gpui-kit";
-import { run, spaces, shared, window as windowInfo } from "herdr";
-import { M, INK, DARK, FONT, TEXT, SMALL, STATUS_COLOR, placeName, h_flex, glyph, FONT_SMALL, LH, BADGE_SLOTS, BADGE_COLORS, badgeCount, openMenu, openInbox, unreadCount } from "./kit.js";
+import { run, spaces, panes, shared, window as windowInfo } from "herdr";
+import { M, INK, DARK, FONT, TEXT, SMALL, STATUS_COLOR, placeName, h_flex, glyph, FONT_SMALL, LH, BADGE_SLOTS, BADGE_COLORS, badgeCount, openMenu, openInbox, openStamina, openQuest, openRenameTab, paneName, unreadCount, isEn, tr } from "./kit.js";
 
-const DAYS = ["CN", "THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7"];
+const DAYS_VI = ["CN", "THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7"];
+const DAYS_EN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
-// Gen 2 clock: "THỨ 2 20:08", the day in upper case, then HH:MM.
+// Gen 2 clock: "THỨ 2 20:08" / "MON 20:08", the day in upper case, then HH:MM.
 function clockText() {
   const d = new Date();
   const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  return `${DAYS[d.getDay()]} ${hm}`;
+  const days = isEn() ? DAYS_EN : DAYS_VI;
+  return `${days[d.getDay()]} ${hm}`;
 }
 
 // A tab's status dot, 6px in its status color. Blocked blinks.
@@ -31,7 +33,11 @@ function statusDot(status) {
 }
 
 // A tab pill: active = surface1 fill with a mauve border (the one its space shows).
+// Right-click opens the rename dialog for this tab.
 function tabBox(t) {
+  const tabPanes = panes().filter((x) => x.tab === t.id);
+  const singleName = tabPanes.length === 1 ? paneName(tabPanes[0].pane) : "";
+  const label = singleName || t.name;
   let box = h_flex()
     .id(`bar-tab-${t.id}`)
     .flex_none()
@@ -46,11 +52,15 @@ function tabBox(t) {
     .text_color(INK)
     .cursor_pointer()
     .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+    .on_mouse_down("right", (_e, cx) => {
+      cx.stop_propagation();
+      openRenameTab(t.id, singleName || (t.named ? t.name : ""));
+    })
     .on_click(() => run("tab.select", { id: t.id }));
   if (!t.active) box = box.hover((s) => s.bg(M.surface0));
   const dot = statusDot(t.status);
   if (dot) box = box.child(dot);
-  return box.child(div().max_w(160).truncate().child(t.name));
+  return box.child(div().max_w(160).truncate().child(label));
 }
 
 // A window button: rounded, hover fills with `hover.bg` and inks `hover.fg`.
@@ -87,7 +97,7 @@ export default class Role {
     const unread = unreadCount();
 
     let badges = h_flex().gap(3).flex_none().items_center().child(
-      div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).child("HUY HIỆU"),
+      div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).child(tr("HUY HIỆU", "BADGES")),
     );
     for (let i = 0; i < BADGE_SLOTS; i++) {
       badges = badges.child(
@@ -97,6 +107,45 @@ export default class Role {
           .child(glyph(i < earned ? "badge" : "badge-empty", 10)),
       );
     }
+
+    const paneRoles = shared("pocket.pane.roles") ?? {};
+    const stOpen = Boolean(panes().find((p) => paneRoles[p.pane] === "stamina" || shared("pocket.stamina.pane") === p.pane));
+    const staminaBtn = div()
+      .id("bar-stamina")
+      .flex_none()
+      .h(22)
+      .px(8)
+      .flex()
+      .items_center()
+      .rounded(3)
+      .border(1)
+      .border_color(stOpen ? M.green : M.surface2)
+      .when(stOpen, (s) => s.bg(M.surface1))
+      .text_color(M.green)
+      .cursor_pointer()
+      .hover((s) => s.bg(M.surface1).border_color(M.green))
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_click(() => openStamina())
+      .child(tr("THỂ LỰC", "STAMINA"));
+
+    const questOpen = Boolean(panes().find((p) => paneRoles[p.pane] === "quest"));
+    const questBtn = div()
+      .id("bar-quest")
+      .flex_none()
+      .h(22)
+      .px(8)
+      .flex()
+      .items_center()
+      .rounded(3)
+      .border(1)
+      .border_color(questOpen ? M.green : M.surface2)
+      .when(questOpen, (s) => s.bg(M.surface1))
+      .text_color(M.green)
+      .cursor_pointer()
+      .hover((s) => s.bg(M.surface1).border_color(M.green))
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_click(() => openQuest())
+      .child(tr("NHIỆM VỤ", "QUESTS"));
 
     let root = h_flex()
       .size_full()
@@ -149,6 +198,10 @@ export default class Role {
       .child(div().flex_1().min_w(0))
       .child(badges)
       .child(div().flex_none().text_color(M.peach).child(clockText()))
+      // Weekly usage across all models: THỂ LỰC / STAMINA (opens right pane).
+      .child(staminaBtn)
+      // Quest log: NHIỆM VỤ / QUESTS (opens right pane).
+      .child(questBtn)
       // Notifications: THƯ, with the unread count.
       .child(
         h_flex()
@@ -166,7 +219,7 @@ export default class Role {
           .hover((s) => s.bg(M.surface1).border_color(M.mauve))
           .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .on_click(() => openInbox())
-          .child("THƯ")
+          .child(tr("THƯ", "MAIL"))
           .when(unread > 0, (e) => e.child(
             div().flex_none().px(4).rounded(7).bg(M.red).text_color(M.crust)
               .text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL))
