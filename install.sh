@@ -103,6 +103,19 @@ if [ -d "$HOME/.gemini/antigravity-cli" ] && command -v jq >/dev/null 2>&1; then
   esac
 fi
 
+# Alt+N opens the notes panel in this layout. Added to keys.json only when that
+# key is free there (an existing binding is left alone); no keys.json is created,
+# since writing one would freeze Herdr's default shortcuts.
+keys="$dest/keys.json"
+if [ -f "$keys" ] && command -v jq >/dev/null; then
+  if [ "$(jq -r '."layout:pocket"."alt-n" // empty' "$keys")" = "" ]; then
+    jq '."layout:pocket" = ((."layout:pocket" // {}) + {"alt-n": "pocket.notes"})' "$keys" > "$keys.tmp" \
+      && mv "$keys.tmp" "$keys" && echo "pocket: Alt+N → notes added to keys.json" || rm -f "$keys.tmp"
+  fi
+else
+  echo "pocket: for Alt+N notes, add to keys.json: \"layout:pocket\": { \"alt-n\": \"pocket.notes\" }"
+fi
+
 if command -v herdr-app >/dev/null; then
   herdr-app check "$dest/mods/pocket"
   echo "pocket: installed ($mode). Switch to it: herdr-app do layout.switch --name pocket"

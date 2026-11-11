@@ -80,6 +80,12 @@ tên agent, tên space, model rút gọn kèm vạch effort, thanh **HP** và th
 - Pane terminal thường (shell) có **Poké Ball** làm icon trên tiêu đề.
 - **THƯ / MENU › THÔNG BÁO**: danh sách thông báo, lọc TẤT CẢ / CHƯA ĐỌC, ✓ để đánh dấu
   đã đọc hoặc chưa đọc từng cái, **ĐỌC HẾT**, **XÓA ĐÃ ĐỌC**. Bấm một dòng để tới agent đó.
+- **GHI CHÚ / NOTES** (nút trên thanh trên cùng, hoặc **Alt+N** ở bất cứ đâu trong layout): mở khung
+  **Neovim** bên phải trên `~/.config/herdr-app/data/pocket/notes.md` và đặt con trỏ vào đó; đang gõ trong
+  đó thì Alt+N ẩn nó và quay lại pane cũ. Neovim chạy với `clipboard=unnamed,unnamedplus`, tự lưu mỗi lần
+  sửa, tự đọc lại khi file đổi bên ngoài; vẫn chạy khi khung ẩn, `:q` thì lần mở sau tự chạy lại (terminal
+  core tên `pocket-notes`). Muốn ghi vào file khác trên một máy: thay `notes.md` bằng symlink tới file đó, Neovim
+  sẽ mở file đích và chạy trong thư mục của nó. Phím nằm trong `keys.json`: `"layout:pocket": { "alt-n": "pocket.notes" }`.
 - **MENU › NGÔN NGỮ / LANGUAGE**: đổi qua lại giữa tiếng Việt (`VI`) và tiếng Anh (`EN`).
 
 ## Hình ảnh lấy từ đâu (cách làm)
@@ -120,6 +126,7 @@ mods/pocket/
   menu.js trainer.js map.js picker.js rename.js inbox.js   các overlay
   agent.js       overlay thông tin agent + giới hạn dùng
   fight.js       popup chiêu thức (từ cánh đồng)
+  notes.js       đầu khung ghi chú (cột "notes" của layout, Alt+N); Neovim chạy trong block terminal bên dưới
   moves.js       hệ Gen 1 của 151 con, bộ chiêu, số chiêu mở theo tiến hóa
   fx.js          hiệu ứng của từng hệ trên cánh đồng (chỉ animation native)
   agent-info.py  session Claude Code → pocket.info
@@ -132,7 +139,7 @@ tools/watch.py          thay lại symlink khi file trong repo đổi, để Her
 Shared state (`~/.config/herdr-app/shared.json`): `pocket.mons`, `pocket.shiny`, `pocket.art`,
 `pocket.walk`, `pocket.levels`, `pocket.badges`, `pocket.events` (tối đa 50, có cờ `read`),
 `pocket.info`, `pocket.screen`, `pocket.hp` (kèm `windows` cho mọi cửa sổ giới hạn),
-`pocket.names`, `pocket.trainer`, `pocket.fx` (chiêu vừa ra), `pocket.lang` (`"vi"` | `"en"`).
+`pocket.names`, `pocket.trainer`, `pocket.fx` (chiêu vừa ra), `pocket.lang` (`"vi"` | `"en"`), `pocket.notes.back` (pane để quay lại sau Alt+N).
 
 ### Ghi chú khi sửa
 - Chỉ một bản sao chạy bộ nạp: role `dialog` gọi `startLoader(cx)` trong `init`.

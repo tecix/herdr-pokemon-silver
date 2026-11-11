@@ -1,12 +1,176 @@
 {
   "id": "root",
   "type": "column",
+  "children": [
+    {
+      "id": "bar",
+      "type": "block",
+      "content": {
+        "mod": "pocket",
+        "props": {
+          "role": "bar"
+        }
+      },
+      "size": {
+        "px": 26
+      },
+      "window_drag": true
+    },
+    {
+      "id": "screen",
+      "type": "row",
+      "children": [
+        {
+          "id": "sidebar",
+          "type": "block",
+          "content": {
+            "mod": "pocket",
+            "props": {
+              "role": "party"
+            }
+          },
+          "size": {
+            "px": 283
+          },
+          "min": 160,
+          "max": 460
+        },
+        {
+          "id": "main",
+          "type": "block",
+          "content": {
+            "tab": "active",
+            "pane": {
+              "header": {
+                "content": {
+                  "mod": "pocket",
+                  "props": {
+                    "role": "header"
+                  }
+                },
+                "reveal": "always",
+                "height": 30,
+                "position": "top"
+              },
+              "background": "background",
+              "border": {
+                "width": 2,
+                "color": "border"
+              },
+              "focus": {
+                "width": 2,
+                "color": "accent"
+              },
+              "radius": 4,
+              "gap": 8,
+              "lone": true
+            }
+          }
+        },
+        {
+          "id": "notes",
+          "type": "column",
+          "children": [
+            {
+              "id": "notes-head",
+              "type": "block",
+              "content": {
+                "mod": "pocket",
+                "props": {
+                  "role": "notes"
+                }
+              },
+              "size": {
+                "px": 30
+              }
+            },
+            {
+              "id": "notes-term",
+              "type": "block",
+              "content": {
+                "terminal": "pocket-notes"
+              }
+            }
+          ],
+          "size": {
+            "px": 420
+          },
+          "min": 240,
+          "max": 900,
+          "hidden": true,
+          "background": "background",
+          "border": {
+            "width": 2,
+            "color": "border"
+          },
+          "radius": 4,
+          "focus": {
+            "border": {
+              "width": 2,
+              "color": "accent"
+            }
+          },
+          "gap": 0
+        }
+      ],
+      "padding": [
+        0,
+        8
+      ],
+      "gap": 8
+    },
+    {
+      "id": "bottom",
+      "type": "row",
+      "children": [
+        {
+          "id": "field",
+          "type": "block",
+          "content": {
+            "mod": "pocket",
+            "props": {
+              "role": "field"
+            }
+          },
+          "padding": [
+            8,
+            8
+          ]
+        },
+        {
+          "id": "dialog",
+          "type": "block",
+          "content": {
+            "mod": "pocket",
+            "props": {
+              "role": "dialog"
+            }
+          },
+          "size": {
+            "px": 471
+          },
+          "min": 320,
+          "max": 900,
+          "padding": [
+            8,
+            8
+          ]
+        }
+      ],
+      "size": {
+        "px": 132
+      },
+      "min": 80,
+      "max": 400,
+      "hidden": true,
+      "gap": 0
+    }
+  ],
+  "background": "canvas",
   "theme": {
     "light": "pocket-light",
     "dark": "pocket"
   },
-  "font": "JetBrains Mono",
-  "font_size": 14,
   "ui_font": "Galmuri11",
   "terminal_padding": [
     8,
@@ -18,125 +182,5 @@
     12,
     9
   ],
-  "background": "canvas",
-  "preview": "layouts/pocket.svg",
-  "children": [
-    {
-      "id": "bar",
-      "type": "block",
-      "size": {
-        "px": 34
-      },
-      "window_drag": true,
-      "content": {
-        "mod": "pocket",
-        "props": {
-          "role": "bar"
-        }
-      }
-    },
-    {
-      "id": "screen",
-      "type": "row",
-      "gap": 8,
-      "padding": [
-        0,
-        8
-      ],
-      "children": [
-        {
-          "id": "sidebar",
-          "type": "block",
-          "size": {
-            "px": 300
-          },
-          "min": 160,
-          "max": 460,
-          "content": {
-            "mod": "pocket",
-            "props": {
-              "role": "party"
-            }
-          }
-        },
-        {
-          "id": "main",
-          "type": "block",
-          "content": {
-            "tab": "active",
-            "pane": {
-              "gap": 8,
-              "radius": 4,
-              "background": "background",
-              "border": {
-                "width": 2,
-                "color": "border"
-              },
-              "focus": {
-                "width": 2,
-                "color": "accent"
-              },
-              "header": {
-                "content": {
-                  "mod": "pocket",
-                  "props": {
-                    "role": "header"
-                  }
-                },
-                "height": 30,
-                "position": "top",
-                "reveal": "always"
-              },
-              "lone": true
-            }
-          }
-        }
-      ]
-    },
-    {
-      "id": "bottom",
-      "type": "row",
-      "size": {
-        "px": 124
-      },
-      "min": 80,
-      "max": 400,
-      "gap": 0,
-      "children": [
-        {
-          "id": "field",
-          "type": "block",
-          "padding": [
-            8,
-            8
-          ],
-          "content": {
-            "mod": "pocket",
-            "props": {
-              "role": "field"
-            }
-          }
-        },
-        {
-          "id": "dialog",
-          "type": "block",
-          "size": {
-            "px": 520
-          },
-          "padding": [
-            8,
-            8
-          ],
-          "content": {
-            "mod": "pocket",
-            "props": {
-              "role": "dialog"
-            }
-          },
-          "min": 320,
-          "max": 900
-        }
-      ]
-    }
-  ]
+  "preview": "layouts/pocket.svg"
 }

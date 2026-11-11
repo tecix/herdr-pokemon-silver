@@ -43,12 +43,10 @@ function button(child, id, command, args, hover = { bg: M.surface1, fg: INK }) {
     .child(child);
 }
 
-// The Pokémon picture: a relative box so it can bob. Working: bobs like the
-// Gen 2 party icons. Sleeping: half faded.
+// The Pokémon picture, still (no bobbing in the header). Sleeping: half faded.
 function icon(a, pane) {
   const mood = moodOf(a);
   let box = div()
-    .relative()
     .w(ICON_W)
     .h(ICON)
     .flex_none()
@@ -56,7 +54,6 @@ function icon(a, pane) {
     .items_center()
     .justify_center()
     .child(mon(pane, "icon", ICON));
-  if (mood === "walk") box = box.loop("top", { from: 0, to: -3, period: 400 });
   if (mood === "sleep") box = box.opacity(0.5);
   return box;
 }

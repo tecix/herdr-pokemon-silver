@@ -10,7 +10,7 @@
 // rotating colors.
 import { div } from "gpui-kit";
 import { run, spaces, panes, shared, window as windowInfo } from "herdr";
-import { M, INK, DARK, FONT, TEXT, SMALL, STATUS_COLOR, placeName, h_flex, glyph, FONT_SMALL, LH, BADGE_SLOTS, BADGE_COLORS, badgeCount, openMenu, openInbox, openStamina, openQuest, openRenameTab, paneName, unreadCount, isEn, tr } from "./kit.js";
+import { M, INK, DARK, FONT, TEXT, SMALL, STATUS_COLOR, placeName, h_flex, glyph, FONT_SMALL, LH, BADGE_SLOTS, BADGE_COLORS, badgeCount, openMenu, openInbox, openStamina, openQuest, jumpNotes, notesShown, openRenameTab, paneName, unreadCount, isEn, tr } from "./kit.js";
 
 const DAYS_VI = ["CN", "THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7"];
 const DAYS_EN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -147,6 +147,25 @@ export default class Role {
       .on_click(() => openQuest())
       .child(tr("NHIỆM VỤ", "QUESTS"));
 
+    const notesOpen = notesShown();
+    const notesBtn = div()
+      .id("bar-notes")
+      .flex_none()
+      .h(22)
+      .px(8)
+      .flex()
+      .items_center()
+      .rounded(3)
+      .border(1)
+      .border_color(notesOpen ? M.green : M.surface2)
+      .when(notesOpen, (s) => s.bg(M.surface1))
+      .text_color(M.green)
+      .cursor_pointer()
+      .hover((s) => s.bg(M.surface1).border_color(M.green))
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_click((_e, cx) => cx.spawn(async () => jumpNotes()))
+      .child(tr("GHI CHÚ", "NOTES"));
+
     let root = h_flex()
       .size_full()
       .bg(M.crust)
@@ -202,6 +221,8 @@ export default class Role {
       .child(staminaBtn)
       // Quest log: NHIỆM VỤ / QUESTS (opens right pane).
       .child(questBtn)
+      // Notes: GHI CHÚ / NOTES (the "notes" block; Alt+N).
+      .child(notesBtn)
       // Notifications: THƯ, with the unread count.
       .child(
         h_flex()

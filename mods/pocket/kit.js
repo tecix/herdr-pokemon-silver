@@ -8,7 +8,7 @@
 
 import { div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { theme, shared, setShared, agents, spaces, openOverlay, settings, panes, terminals, playSound, run } from "herdr";
+import { theme, layout, focused, appHome, hc, exec, shared, setShared, agents, spaces, openOverlay, settings, panes, terminals, playSound, run } from "herdr";
 import { monOf, monName, artOf, agentList, monKey, shinyOf, evolutionOf, setMon, setShiny, windowId } from "./mons.js";
 export { agentList };
 
@@ -863,6 +863,136 @@ export function openInbox() {
 }
 export function openMap() {
   openOverlay({ mod: "pocket", kind: "dialog", frame: "none", width: 0.8, height: 0.8, props: { role: "map" } });
+}
+
+// Notes: the layout column "notes", right of the panes, hidden until opened:
+// a header (role "notes") over a terminal block that shows the core terminal
+// named "pocket-notes" (Neovim on data/pocket/notes.md under Herdr's home). The
+// block names the terminal, not its address, so the layout file never changes;
+// ensureNotes() starts Neovim again whenever it isn't running.
+export const NOTES_NAME = "pocket-notes";
+// Neovim's start: clipboard=unnamed (plus unnamedplus, so a yank also reaches
+// the system clipboard on Linux), no line numbers, status line or ruler, save on every change,
+// re-read outside edits.
+const NOTES_NVIM = [
+  "set clipboard=unnamed,unnamedplus",
+  "set nonumber norelativenumber",
+  "set laststatus=0 noruler",
+  "set autoread",
+  "autocmd TextChanged,InsertLeave,FocusLost,BufLeave * silent! update",
+  "autocmd FocusGained,BufEnter * silent! checktime",
+];
+export function notesPath() {
+  return `${appHome()}/data/pocket/notes.md`;
+}
+export function notesTerminal() {
+  return (terminals() ?? []).find((t) => t.name === NOTES_NAME && t.state === "live") ?? null;
+}
+let notesStarting = null; // one start at a time, shared by every copy
+// Starts Neovim when it isn't running, and makes sure the layout has the block
+// showing it: Herdr drops a terminal block from the layout (and rewrites the
+// file) when its terminal ends, and a block keeps the terminal it found first.
+export async function ensureNotes() {
+  const live = notesTerminal();
+  if (live) {
+    if (!findNode(layout(), "notes-term")) setNotesBlock(true);
+    return live.address;
+  }
+  if (!notesStarting) {
+    notesStarting = startNotes().finally(() => {
+      notesStarting = null;
+    });
+  }
+  return notesStarting;
+}
+// The file Neovim edits: notes.md, or where it links to when it is a symlink
+// (one step, so a path you chose stays as written; each computer can link it
+// to its own file), with Neovim started in that file's folder.
+async function notesFile() {
+  const path = notesPath();
+  try {
+    const r = await exec("readlink", [path]);
+    const target = r.code === 0 ? r.stdout.trim() : "";
+    if (target) return target.startsWith("/") ? target : `${path.slice(0, path.lastIndexOf("/"))}/${target}`;
+  } catch {}
+  return path;
+}
+async function startNotes() {
+  const file = await notesFile();
+  const args = ["run", "--bg", "--json", "--no-parent", "--name", NOTES_NAME, "--cwd", file.slice(0, file.lastIndexOf("/")) || "/", "--", "nvim"];
+  for (const c of NOTES_NVIM) args.push("-c", c);
+  args.push(file);
+  let address = null;
+  try {
+    address = JSON.parse((await hc(args)).stdout).address ?? null;
+  } catch {}
+  if (address) {
+    // A fresh terminal: drop any old block first so the new one binds to it.
+    if (findNode(layout(), "notes-term")) setNotesBlock(false);
+    setNotesBlock(true);
+  }
+  return address;
+}
+// Adds (or removes) the "notes-term" block under the "notes" column.
+function setNotesBlock(on) {
+  const tree = JSON.parse(JSON.stringify(layout() ?? null));
+  const notes = findNode(tree, "notes");
+  if (!notes) return;
+  notes.children = (notes.children ?? []).filter((c) => c.id !== "notes-term");
+  if (on) notes.children.push({ id: "notes-term", type: "block", content: { terminal: NOTES_NAME } });
+  // layout() reports what shows now; the file keeps the panel hidden (Alt+N
+  // shows it), so put that back and show it again if it was showing.
+  const wasShown = !notes.hidden;
+  notes.hidden = true;
+  run("layout.set", { layout: tree });
+  if (wasShown) run("layout.show", { id: "notes" });
+}
+function findNode(n, id) {
+  if (!n || typeof n !== "object") return null;
+  if (n.id === id) return n;
+  for (const c of n.children ?? []) {
+    const f = findNode(c, id);
+    if (f) return f;
+  }
+  return null;
+}
+// Whether Neovim runs and the layout shows it.
+export function notesReady() {
+  return Boolean(notesTerminal() && findNode(layout(), "notes-term"));
+}
+export function notesShown() {
+  const n = findNode(layout(), "notes");
+  return Boolean(n && !n.hidden);
+}
+// Whether the keyboard is in the notes terminal (a layout block: no pane).
+// Herdr names a focused layout block by its id ("notes-term") as the pane, or
+// gives no pane and the block's terminal (the name, or the address).
+export function notesFocused() {
+  const f = focused();
+  if (!f) return false;
+  if (f.pane === "notes-term") return true;
+  const t = notesTerminal();
+  return !f.pane && (f.terminal === NOTES_NAME || (t && f.terminal === t.address));
+}
+// Alt+N and the top bar's NOTES button: hidden -> show it and type in it;
+// shown but elsewhere -> type in it; typing in it -> hide it, back to the pane.
+export async function jumpNotes() {
+  if (notesShown() && notesFocused()) {
+    closeNotes();
+    return;
+  }
+  const f = focused();
+  if (f?.pane && panes().some((p) => p.pane === f.pane)) setShared("pocket.notes.back", f.pane);
+  const address = await ensureNotes();
+  run("layout.show", { id: "notes" });
+  // The block shows the terminal by name, and pane.focus finds blocks by what
+  // they show: the address alone is "no such pane".
+  if (address) run("pane.focus", { terminal: NOTES_NAME });
+}
+export function closeNotes() {
+  run("layout.hide", { id: "notes" });
+  const back = shared("pocket.notes.back");
+  if (back && panes().some((p) => p.pane === back)) run("pane.focus", { pane: back });
 }
 
 // Where we are: the shown space's name, as a place name.

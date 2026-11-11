@@ -18,13 +18,15 @@
 //   town    dialog: one town's details (kit openTown; right-click a town row or map town)
 //   quest   dialog: each town's to-do list (the `todo` command) as quests (kit openQuest)
 //   bag     popup: items that send a preset command to one agent (kit openBag)
+//   notes   header of the layout column "notes": Neovim on the notes file below it
+//           (Alt+N, top bar NOTES; kit jumpNotes / ensureNotes)
 //   fight   popup: a Pokémon's moves (kit openFight; right-click it on the
 //           field); the field plays the one picked (moves.js, fx.js)
 // With no role (herdr-app check), every role renders once, stacked, so a check
 // covers them all.
 
 import { View, div } from "gpui-kit";
-import { props } from "herdr";
+import { props, nextCommand } from "herdr";
 import Bar from "./bar.js";
 import Party from "./party.js";
 import Header from "./header.js";
@@ -42,9 +44,20 @@ import Stamina from "./stamina.js";
 import Quest from "./quest.js";
 import Bag from "./bag.js";
 import Town from "./town.js";
-import { syncZoom, syncTheme } from "./kit.js";
+import Notes from "./notes.js";
+import { syncZoom, syncTheme, jumpNotes } from "./kit.js";
 
-const ROLES = { bar: Bar, party: Party, header: Header, dialog: Dialog, picker: Picker, field: Field, menu: Menu, trainer: Trainer, map: TownMap, rename: Rename, inbox: Inbox, agent: AgentInfo, fight: Fight, stamina: Stamina, quest: Quest, bag: Bag, town: Town };
+// Key commands ("alt-n": "pocket.notes" in keys.json) reach every shown copy of
+// this mod; copies share this module, so the first copy to hear one acts.
+let lastCommand = { name: null, at: 0 };
+async function onCommand(name) {
+  const now = Date.now();
+  if (lastCommand.name === name && now - lastCommand.at < 250) return;
+  lastCommand = { name, at: now };
+  if (name === "notes") await jumpNotes();
+}
+
+const ROLES = { bar: Bar, party: Party, header: Header, dialog: Dialog, picker: Picker, field: Field, menu: Menu, trainer: Trainer, map: TownMap, rename: Rename, inbox: Inbox, agent: AgentInfo, fight: Fight, stamina: Stamina, quest: Quest, bag: Bag, town: Town, notes: Notes };
 
 export default class Pocket extends View {
   init(p, cx) {
@@ -56,6 +69,18 @@ export default class Pocket extends View {
       return r;
     });
     this.missing = pr.role && !ROLES[pr.role] ? pr.role : null;
+    if (pr.role) {
+      cx.spawn(async (cx) => {
+        for (;;) {
+          await onCommand(await nextCommand());
+          cx.notify();
+        }
+      });
+    }
+  }
+
+  async close(cx) {
+    for (const r of this.roles) await r.close?.(cx);
   }
 
   render(cx) {
