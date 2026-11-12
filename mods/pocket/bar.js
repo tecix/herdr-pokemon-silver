@@ -1,16 +1,17 @@
 // Pocket role "bar": the top strip, 34px tall. It spans the window and drags it
 // (the layout sets window_drag); every clickable box stops the mouse-down so a
-// press on it doesn't start a drag. Place name, the active space's tabs, badges,
-// clock, the THƯ button (notifications, kit openInbox; a red count when some
+// press on it doesn't start a drag. The shown town's island type icon and its
+// name, the active space's tabs, the island (machine) it is on, the clock, the THƯ button (notifications, kit openInbox; a red count when some
 // are unread), the MENU button (kit openMenu: settings are in there), and
 // window buttons when the system draws none.
 //
 // Look: Catppuccin Macchiato, Gen 2 flavored. Tabs are small pills; a tab's
-// status is a 6px dot (blocked blinks). Badges are gym badges, earned ones in
-// rotating colors.
+// status is a 6px dot (blocked blinks). The island: its type icon and name
+// (types.js); hover tells the type.
 import { div } from "gpui-kit";
 import { run, spaces, panes, shared, window as windowInfo } from "herdr";
-import { M, INK, DARK, FONT, TEXT, SMALL, STATUS_COLOR, placeName, h_flex, glyph, FONT_SMALL, LH, BADGE_SLOTS, BADGE_COLORS, badgeCount, openMenu, openInbox, openStamina, openQuest, jumpNotes, notesShown, openRenameTab, paneName, unreadCount, isEn, tr } from "./kit.js";
+import { islandTypeIcon, islandName, typeName, islandType } from "./types.js";
+import { M, INK, DARK, FONT, TEXT, SMALL, STATUS_COLOR, placeName, h_flex, glyph, FONT_SMALL, LH, openMenu, openInbox, openStamina, openQuest, jumpNotes, notesShown, openRenameTab, paneName, unreadCount, isEn, tr } from "./kit.js";
 
 const DAYS_VI = ["CN", "THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7"];
 const DAYS_EN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -93,20 +94,18 @@ export default class Role {
     const mac = win.platform === "macos";
     const active = spaces().find((s) => s.active);
     const tabs = (active?.tabs ?? []).filter((t) => !t.settled);
-    const earned = badgeCount();
     const unread = unreadCount();
+    const machine = active?.machine ?? "";
 
-    let badges = h_flex().gap(3).flex_none().items_center().child(
-      div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).child(tr("HUY HIỆU", "BADGES")),
-    );
-    for (let i = 0; i < BADGE_SLOTS; i++) {
-      badges = badges.child(
-        div()
-          .flex_none()
-          .text_color(i < earned ? BADGE_COLORS[i] : M.surface2)
-          .child(glyph(i < earned ? "badge" : "badge-empty", 10)),
-      );
-    }
+    // The island the shown town is on: its type icon and the machine's name.
+    const island = h_flex()
+      .id("bar-island")
+      .flex_none()
+      .gap(5)
+      .items_center()
+      .tooltip(`${tr("Hệ", "Type")}: ${typeName(islandType(machine))}`)
+      .child(islandTypeIcon(machine, 14))
+      .child(div().max_w(160).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).child(islandName(machine).toUpperCase()));
 
     const paneRoles = shared("pocket.pane.roles") ?? {};
     const stOpen = Boolean(panes().find((p) => paneRoles[p.pane] === "stamina" || shared("pocket.stamina.pane") === p.pane));
@@ -185,7 +184,7 @@ export default class Role {
           .flex_none()
           .gap(6)
           .items_center()
-          .child(div().flex_none().text_color(M.mauve).child(glyph("badge", 10)))
+          .child(islandTypeIcon(machine, 14))
           .child(div().max_w(240).truncate().text_color(M.lavender).child(placeName())),
       )
       .child(
@@ -215,7 +214,7 @@ export default class Role {
           ),
       )
       .child(div().flex_1().min_w(0))
-      .child(badges)
+      .child(island)
       .child(div().flex_none().text_color(M.peach).child(clockText()))
       // Weekly usage across all models: THỂ LỰC / STAMINA (opens right pane).
       .child(staminaBtn)

@@ -3,7 +3,8 @@
 // data/pocket/notes.md (the core terminal named "pocket-notes", kit ensureNotes).
 // Alt+N or the top bar's NOTES button opens it and puts the keyboard in Neovim;
 // Alt+N again from Neovim hides it and goes back to the pane you came from.
-// Neovim keeps running while hidden, and saves the file on every change.
+// Neovim keeps running while hidden, and saves the file on every change. It
+// quits by itself once herdr-app isn't running (kit NOTES_QUIT_WITHOUT_APP).
 
 import { div } from "gpui-kit";
 import { h_flex } from "gpui-base";

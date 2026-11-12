@@ -6,10 +6,14 @@
 // Enter goes there and closes the map. Every known machine is an island, even
 // one with no town yet; each ends in "+ THỊ TRẤN MỚI", which founds a new town
 // (space.new) on that machine; N does it on the island under the cursor.
+// Each island has a Pokémon type (types.js): its icon stands before each town's
+// name, and the island's title tells it; click the type there, or press T
+// (Shift+T back), to give the island another one.
 import { lootChips } from "./gitloot.js";
 import { div } from "gpui-kit";
 import { props, closeOverlay, run, spaces, home, machines } from "herdr";
 import { islandIcon } from "./scene.js";
+import { islandTypeIcon, islandType, typeName, cycleIslandType } from "./types.js";
 import {
   frame, v_flex, h_flex, cursor, mon, pokeball, M, INK, DARK, TEXT, SMALL, BIG, FONT, FONT_SMALL, FONT_BIG, LH,
   STATUS_COLOR, STATUS, agentList, crisp, zoom, tr, openTown,
@@ -56,6 +60,11 @@ export default class Role {
   key(e, cx, order) {
     const k = e.key;
     if (k === "n") { cx.stop_propagation(); return this.found(order[this.at]?.machine); }
+    if (k === "t" || k === "T") {
+      cx.stop_propagation();
+      if (order[this.at]) cycleIslandType(order[this.at].machine ?? "", e.modifiers?.shift ? -1 : 1);
+      return cx.notify();
+    }
     if (k === "down" || k === "right" || k === "j" || k === "l") this.at = (this.at + 1) % order.length;
     else if (k === "up" || k === "left" || k === "k" || k === "h") this.at = (this.at + order.length - 1) % order.length;
     else if (k === "enter" || k === "space") return order[this.at] && this.go(order[this.at]);
@@ -84,6 +93,7 @@ export default class Role {
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openTown(s.id); })
       .child(cursor(s.active))
       .child(square)
+      .child(islandTypeIcon(s.machine ?? "", 14))
       .child(div().max_w(150).truncate().text_size(TEXT).line_height(LH(TEXT)).text_color(here ? INK : DARK).child(s.name.toUpperCase()))
       .when(Boolean(lootChips(s.id)), (e) => e.child(lootChips(s.id, SMALL)))
       .child(icons);
@@ -127,6 +137,25 @@ export default class Role {
             .gap(4)
             .child(islandIcon(k, 12))
             .child(div().flex_1().min_w(0).truncate().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.green).child(islandTitle)),
+        )
+        // The island's type: click for the next one (T on the keyboard).
+        .child(
+          h_flex()
+            .id("type-" + (k || "here"))
+            .flex_none()
+            .gap(4)
+            .px(4)
+            .py(1)
+            .items_center()
+            .rounded(3)
+            .border(1)
+            .border_color(M.surface2)
+            .cursor_pointer()
+            .hover((st) => st.bg(M.surface1).border_color(M.yellow))
+            .tooltip(tr("Đổi hệ của đảo (T)", "Change the island's type (T)"))
+            .on_click((_e, cx) => { cx.stop_propagation(); cycleIslandType(k, 1); cx.notify(); })
+            .child(islandTypeIcon(k, 14))
+            .child(div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.overlay1).child(typeName(islandType(k)))),
         )
         .child(
           div()
@@ -198,8 +227,8 @@ export default class Role {
 
     const foot = div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(M.overlay1)
       .child(tr(
-        "↑↓ chọn thị trấn  ·  Enter đến đó  ·  N thị trấn mới  ·  Esc đóng",
-        "↑↓ select town  ·  Enter go there  ·  N new town  ·  Esc close",
+        "↑↓ chọn thị trấn  ·  Enter đến đó  ·  N thị trấn mới  ·  T đổi hệ đảo  ·  Esc đóng",
+        "↑↓ select town  ·  Enter go there  ·  N new town  ·  T island type  ·  Esc close",
       ));
 
     return frame(v_flex().size_full().gap(10).child(head).child(sea).child(foot), { id: "map", full: true, pad: 12 })

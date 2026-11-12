@@ -873,7 +873,20 @@ export function openMap() {
 export const NOTES_NAME = "pocket-notes";
 // Neovim's start: clipboard=unnamed (plus unnamedplus, so a yank also reaches
 // the system clipboard on Linux), no line numbers, status line or ruler, save on every change,
-// re-read outside edits.
+// re-read outside edits, and quit once the Herdr window is gone.
+// The core keeps terminals running after herdr-app quits (or crashes), so
+// Neovim checks for the app itself: every 5 s it looks for a herdr-app process
+// and, after two misses in a row (an update restarts the app), saves and quits.
+// The panel starts it again the next time it is shown.
+const NOTES_QUIT_WITHOUT_APP =
+  "lua local uv = vim.uv or vim.loop; local miss = 0; " +
+  "uv.new_timer():start(5000, 5000, vim.schedule_wrap(function() " +
+  "if vim.fn.executable('pgrep') == 0 then return end; " +
+  "vim.fn.system({ 'pgrep', '-x', 'herdr-app' }); " +
+  "if vim.v.shell_error == 0 then miss = 0; return end; " +
+  "miss = miss + 1; " +
+  "if miss >= 2 then vim.cmd('silent! wall'); vim.cmd('qall!') end " +
+  "end))";
 const NOTES_NVIM = [
   "set clipboard=unnamed,unnamedplus",
   "set nonumber norelativenumber",
@@ -881,6 +894,7 @@ const NOTES_NVIM = [
   "set autoread",
   "autocmd TextChanged,InsertLeave,FocusLost,BufLeave * silent! update",
   "autocmd FocusGained,BufEnter * silent! checktime",
+  NOTES_QUIT_WITHOUT_APP,
 ];
 export function notesPath() {
   return `${appHome()}/data/pocket/notes.md`;

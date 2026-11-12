@@ -3,6 +3,7 @@
 import { div } from "gpui-kit";
 import { run } from "herdr";
 import { startLoader } from "./mons.js";
+import { startTypes } from "./types.js";
 import { startGitLoot } from "./gitloot.js";
 import { frame, h_flex, v_flex, FONT, TEXT, SMALL, BIG, DARK, INK, M, agentName, events, eventText, trackAgents, glyph, blink, mon, monFit, pokeball, agentList, FONT_SMALL, LH, FONT_BIG, monNameOf, hpOf, bar, cursor, markRead, unreadCount, openInbox, dismissEvent, tr } from "./kit.js";
 
@@ -43,6 +44,7 @@ function pill(text, bg) {
 export default class Role {
   init(_props, cx) {
     startLoader(cx); // the one copy that fetches Pokémon art (mons.js)
+    startTypes(cx); // island types and their icons (types.js)
     startGitLoot(cx); // each town's git state -> shared pocket.git (gitloot.js)
     this.memo = {};
     this.index = 0; // 0 = newest event

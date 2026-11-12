@@ -44,7 +44,7 @@ Tùy chọn:
 
 | Vùng | Role | Nội dung |
 |---|---|---|
-| Thanh trên | `bar` | Tên space như địa danh, các tab, huy hiệu, đồng hồ kiểu Gen 2, **THƯ** (thông báo, có số chưa đọc), **MENU** |
+| Thanh trên | `bar` | Icon hệ của đảo + tên space như địa danh, các tab, đảo (icon hệ + tên máy), đồng hồ kiểu Gen 2, **THƯ** (thông báo, có số chưa đọc), **MENU** |
 | Sidebar trái | `party` | **ĐỘI HÌNH**: tối đa 6 agent; **HỘP PC** cho phần còn lại; **BẢN ĐỒ** gồm các space |
 | Tiêu đề mỗi pane | `header` | Icon Pokémon, tên agent, model đầy đủ, HP, trạng thái. **Chuột phải để đổi tên pane** |
 | Dải dưới trái | `field` | Pokémon đi lại khi làm việc, đi dạo khi rảnh, ngủ sau 3 phút |
@@ -77,6 +77,12 @@ tên agent, tên space, model rút gọn kèm vạch effort, thanh **HP** và th
   hoặc một máy trong `hc machine ls`) là có space mới ở đó; chỉ có máy này thì tạo luôn.
   Overlay bản đồ vẽ đủ mọi máy thành đảo, kể cả đảo chưa có thị trấn; mỗi đảo có dòng
   **+ THỊ TRẤN MỚI** riêng, phím **N** tạo trên đảo của thị trấn đang chọn.
+- **Hệ của đảo**: mỗi đảo (máy) có một hệ Pokémon (18 hệ). Icon hệ đứng trước tên thị trấn
+  ở **BẢN ĐỒ** (sidebar và overlay), trong HỘP PC, thẻ thị
+  trấn và tiêu đề trên thanh trên cùng; bên phải thanh trên là icon hệ + tên máy của thị
+  trấn đang xem (chỗ huy hiệu cũ; huy hiệu vẫn ở **THẺ TRAINER**). Đảo mới tự nhận một hệ
+  theo tên máy, không trùng đảo khác khi còn hệ trống. Đổi hệ trong overlay bản đồ: bấm ô hệ
+  ở đầu đảo, hoặc phím **T** (Shift+T lùi lại).
 - Pane terminal thường (shell) có **Poké Ball** làm icon trên tiêu đề.
 - **THƯ / MENU › THÔNG BÁO**: danh sách thông báo, lọc TẤT CẢ / CHƯA ĐỌC, ✓ để đánh dấu
   đã đọc hoặc chưa đọc từng cái, **ĐỌC HẾT**, **XÓA ĐÃ ĐỌC**. Bấm một dòng để tới agent đó.
@@ -84,7 +90,8 @@ tên agent, tên space, model rút gọn kèm vạch effort, thanh **HP** và th
   **Neovim** bên phải trên `~/.config/herdr-app/data/pocket/notes.md` và đặt con trỏ vào đó; đang gõ trong
   đó thì Alt+N ẩn nó và quay lại pane cũ. Neovim chạy với `clipboard=unnamed,unnamedplus`, tự lưu mỗi lần
   sửa, tự đọc lại khi file đổi bên ngoài; vẫn chạy khi khung ẩn, `:q` thì lần mở sau tự chạy lại (terminal
-  core tên `pocket-notes`). Muốn ghi vào file khác trên một máy: thay `notes.md` bằng symlink tới file đó, Neovim
+  core tên `pocket-notes`). Đóng cửa sổ `herdr-app` (hoặc app bị crash) thì Neovim tự lưu và thoát sau
+  khoảng 10 giây (cần `pgrep`), lần mở app sau khung ghi chú chạy lại nó. Muốn ghi vào file khác trên một máy: thay `notes.md` bằng symlink tới file đó, Neovim
   sẽ mở file đích và chạy trong thư mục của nó. Phím nằm trong `keys.json`: `"layout:pocket": { "alt-n": "pocket.notes" }`.
 - **MENU › NGÔN NGỮ / LANGUAGE**: đổi qua lại giữa tiếng Việt (`VI`) và tiếng Anh (`EN`).
 
@@ -100,6 +107,11 @@ tên agent, tên space, model rút gọn kèm vạch effort, thanh **HP** và th
 3. `pixel.py` phóng 2x theo kiểu nearest-neighbour để hình sắc nét. `bbox.py` đo vùng
    pixel thật để canh giữa.
 4. Kết quả được ghi trong shared state `pocket.art` / `pocket.walk`. Lỗi mạng thì thử lại sau 1 phút.
+5. **Icon hệ** của đảo: `types.js` tải tấm
+   [Pokemon icons của JWNutz](https://www.deviantart.com/jwnutz/art/Pokemon-icons-669595851) (DeviantArt)
+   vào `data/pocket/types/sheet.png`, rồi `typecut.py` (cần Pillow) cắt 18 icon hệ ra
+   `data/pocket/types/<hệ>.png` (64px) và `<hệ>2.png` (128px). Chưa có thì mỗi hệ là một ô vuông màu của nó;
+   lỗi thì thử lại sau 30 phút.
 
 Mỗi pane được gán một số dex (băm từ id pane, không trùng nhau trên màn hình), lưu ở
 `pocket.mons`. Danh sách 151 tên ở `names.js`.
@@ -128,10 +140,11 @@ mods/pocket/
   fight.js       popup chiêu thức (từ cánh đồng)
   notes.js       đầu khung ghi chú (cột "notes" của layout, Alt+N); Neovim chạy trong block terminal bên dưới
   moves.js       hệ Gen 1 của 151 con, bộ chiêu, số chiêu mở theo tiến hóa
+  types.js       hệ của từng đảo (máy), icon hệ (tải + cắt bằng typecut.py)
   fx.js          hiệu ứng của từng hệ trên cánh đồng (chỉ animation native)
   agent-info.py  session Claude Code → pocket.info
   usage5h.py     mức dùng của máy theo từng cửa sổ (5h, 7d…; chạy cả trên máy remote qua exec {on})
-  pixel.py pmd.py bbox.py chiptune.py preview.py           công cụ
+  pixel.py pmd.py bbox.py typecut.py chiptune.py preview.py   công cụ
 tools/make-pokeball.py  vẽ glyph quả bóng lúc cài
 tools/watch.py          thay lại symlink khi file trong repo đổi, để Herdr nạp lại
 ```
@@ -139,7 +152,8 @@ tools/watch.py          thay lại symlink khi file trong repo đổi, để Her
 Shared state (`~/.config/herdr-app/shared.json`): `pocket.mons`, `pocket.shiny`, `pocket.art`,
 `pocket.walk`, `pocket.levels`, `pocket.badges`, `pocket.events` (tối đa 50, có cờ `read`),
 `pocket.info`, `pocket.screen`, `pocket.hp` (kèm `windows` cho mọi cửa sổ giới hạn),
-`pocket.names`, `pocket.trainer`, `pocket.fx` (chiêu vừa ra), `pocket.lang` (`"vi"` | `"en"`), `pocket.notes.back` (pane để quay lại sau Alt+N).
+`pocket.names`, `pocket.trainer`, `pocket.fx` (chiêu vừa ra), `pocket.lang` (`"vi"` | `"en"`), `pocket.notes.back` (pane để quay lại sau Alt+N),
+`pocket.islands` (hệ của từng đảo, `""` = máy này), `pocket.types.icons` (`"ready"` | `"error"`), `pocket.host` (tên máy này).
 
 ### Ghi chú khi sửa
 - Chỉ một bản sao chạy bộ nạp: role `dialog` gọi `startLoader(cx)` trong `init`.
@@ -156,3 +170,4 @@ Shared state (`~/.config/herdr-app/shared.json`): `pocket.mons`, `pocket.shiny`,
   [mathieucroset/herdr-pokemon-agents](https://github.com/mathieucroset/herdr-pokemon-agents) (MIT).
 - Font [Galmuri](https://github.com/quiple/galmuri) của Minseo Lee (SIL Open Font License 1.1).
 - Hình Pokémon (tải lúc chạy, không phân phối ở đây): PokeAPI/sprites, PMDCollab/SpriteCollab.
+- Icon hệ (tải lúc chạy, không phân phối ở đây): [Pokemon icons](https://www.deviantart.com/jwnutz/art/Pokemon-icons-669595851) của JWNutz.

@@ -10,6 +10,7 @@ import {
   agentName, moodOf, moodBubble, hpOf, hpColor, h_flex, v_flex, agentList, FONT_SMALL, LH, lhPx, modelBadge, crisp, tr
 } from "./kit.js";
 import { islandIcon } from "./scene.js";
+import { islandTypeIcon, machineOfAgent } from "./types.js";
 
 const PARTY_MAX = 6;
 const NARROW = 160;
@@ -244,12 +245,21 @@ function boxRow(a) {
             .child(agentName(a)),
         )
         .child(
-          div()
-            .truncate()
-            .text_color(DARK)
-            .text_size(SMALL).font_family(FONT_SMALL)
-            .line_height(LH(SMALL))
-            .child(a.space_name ?? ""),
+          h_flex()
+            .min_w(0)
+            .gap(4)
+            .items_center()
+            .child(islandTypeIcon(machineOfAgent(a), 11))
+            .child(
+              div()
+                .flex_1()
+                .min_w(0)
+                .truncate()
+                .text_color(DARK)
+                .text_size(SMALL).font_family(FONT_SMALL)
+                .line_height(LH(SMALL))
+                .child(a.space_name ?? ""),
+            ),
         ),
     )
     .child(modelBadge(a, MODEL_SIZE()));
@@ -286,6 +296,7 @@ function mapSection(list, role) {
       .on_click(() => run("space.select", { id: s.id }))
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openTown(s.id); })
       .child(cursor(s.active))
+      .child(islandTypeIcon(s.machine ?? "", 12))
       .child(
         div()
           .flex_1()
@@ -319,6 +330,7 @@ function mapSection(list, role) {
           })
           .child(cursor(false))
           .child(islandIcon(k, 10))
+          .child(islandTypeIcon(k, 12))
           .child(div().flex_1().min_w(0).truncate().text_size(TEXT).line_height(LH(TEXT)).child(k ? tr(`ĐẢO ${k.toUpperCase()}`, `ISLAND ${k.toUpperCase()}`) : tr("MÁY NÀY", "THIS MACHINE"))),
       );
     }

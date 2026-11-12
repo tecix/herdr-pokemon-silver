@@ -4,6 +4,7 @@
 import { div } from "gpui-kit";
 import { props, spaces, panes, home, run, closeOverlay } from "herdr";
 import { islandIcon } from "./scene.js";
+import { islandTypeIcon, islandType, typeName } from "./types.js";
 import { lootChips } from "./gitloot.js";
 import {
   frame, v_flex, h_flex, mon, pokeball, M, INK, DARK, TEXT, SMALL, BIG, FONT, FONT_SMALL, FONT_BIG, LH, lhPx,
@@ -88,6 +89,7 @@ export default class Role {
     const top = h_flex()
       .items_center()
       .gap(8)
+      .child(islandTypeIcon(s.machine ?? "", 20))
       .child(div().flex_1().min_w(0).truncate().text_size(BIG).font_family(FONT_BIG).line_height(LH(BIG)).text_color(M.yellow).child(s.name.toUpperCase()))
       .child(statusSquare);
 
@@ -95,7 +97,9 @@ export default class Role {
     const islandName = s.machine || tr("MÁY NÀY", "THIS MACHINE");
     const islandValue = h_flex().items_center().gap(6)
       .child(islandIcon(s.machine, 12))
-      .child(div().text_size(TEXT).line_height(LH(TEXT)).text_color(INK).child(islandName));
+      .child(div().text_size(TEXT).line_height(LH(TEXT)).text_color(INK).child(islandName))
+      .child(islandTypeIcon(s.machine ?? "", 14))
+      .child(div().text_size(SMALL).font_family(FONT_SMALL).line_height(LH(SMALL)).text_color(DARK).child(typeName(islandType(s.machine ?? ""))));
 
     // Folder
     const tabIds = new Set((s.tabs ?? []).map((t) => t.id));

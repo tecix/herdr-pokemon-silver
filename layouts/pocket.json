@@ -162,7 +162,6 @@
       },
       "min": 80,
       "max": 400,
-      "hidden": true,
       "gap": 0
     }
   ],
